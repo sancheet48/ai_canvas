@@ -15,7 +15,9 @@ import {
   ChevronRight,
   LogOut,
   Sliders,
-  Sparkles
+  Sparkles,
+  Keyboard,
+  X
 } from 'lucide-react';
 
 import { useCanvasStore, CanvasElement, ToolType } from '../store/useCanvasStore';
@@ -100,6 +102,7 @@ export const Board: React.FC = () => {
   // Dialog modals states
   const [showShareModal, setShowShareModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [boardVisibility, setBoardVisibility] = useState<'private' | 'public' | 'link-only'>('private');
   const [boardShareToken, setBoardShareToken] = useState('');
 
@@ -620,6 +623,15 @@ export const Board: React.FC = () => {
   const handleTextSubmit = () => {
     if (!editingTextElementId) return;
     
+    if (editingTextVal.trim() === '') {
+      const nextElements = elements.filter(el => el.id !== editingTextElementId);
+      setElements(nextElements);
+      broadcastCanvasState(nextElements);
+      setEditingTextElementId(null);
+      setEditingTextVal('');
+      return;
+    }
+    
     const nextElements = elements.map(el => {
       if (el.id === editingTextElementId) {
         return {
@@ -886,7 +898,15 @@ export const Board: React.FC = () => {
           />
           <div className="flex justify-end gap-1.5">
             <button
-              onClick={() => setEditingTextElementId(null)}
+              onClick={() => {
+                const targetEl = elements.find(el => el.id === editingTextElementId);
+                if (targetEl && (targetEl.text === 'Text here' || !targetEl.text || targetEl.text.trim() === '')) {
+                  const nextElements = elements.filter(el => el.id !== editingTextElementId);
+                  setElements(nextElements);
+                  broadcastCanvasState(nextElements);
+                }
+                setEditingTextElementId(null);
+              }}
               className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-dark-900 border border-white/5 text-dark-200"
             >
               Cancel
@@ -920,6 +940,102 @@ export const Board: React.FC = () => {
           canvasRef={canvasRef}
           onClose={() => setShowExportModal(false)}
         />
+      )}
+
+      {/* KEYBOARD SHORTCUTS FLOATING TOGGLE BUTTON */}
+      <button
+        onClick={() => setShowShortcuts(true)}
+        className="fixed bottom-6 left-6 p-3 rounded-full bg-dark-900 border border-white/5 text-dark-200 hover:text-white hover-scale shadow-2xl z-30 flex items-center justify-center w-11 h-11"
+        title="Keyboard Shortcuts"
+      >
+        <Keyboard className="w-5 h-5" />
+      </button>
+
+      {/* KEYBOARD SHORTCUTS MODAL DIALOG */}
+      {showShortcuts && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-dark-950/60 backdrop-blur-sm" onClick={() => setShowShortcuts(false)} />
+          <div className="relative w-full max-w-md glass-panel rounded-3xl p-6 shadow-2xl z-10 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-dark-800 pb-3 mb-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Keyboard className="w-4 h-4 text-brand-500" /> Keyboard Shortcuts
+              </h3>
+              <button 
+                onClick={() => setShowShortcuts(false)} 
+                className="p-1 rounded-lg text-dark-200 hover:bg-dark-800 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="flex flex-col gap-2 max-h-[350px] overflow-y-auto text-xs pr-1">
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Selection Tool</span>
+                <span className="font-mono text-brand-400 text-right">V or 1</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Rectangle</span>
+                <span className="font-mono text-brand-400 text-right">R or 2</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Ellipse</span>
+                <span className="font-mono text-brand-400 text-right">O or 3</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Diamond</span>
+                <span className="font-mono text-brand-400 text-right">D or 4</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Line</span>
+                <span className="font-mono text-brand-400 text-right">L or 5</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Arrow</span>
+                <span className="font-mono text-brand-400 text-right">A or 6</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Pencil (Freehand)</span>
+                <span className="font-mono text-brand-400 text-right">P or 7</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Text</span>
+                <span className="font-mono text-brand-400 text-right">T or 8</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Image Upload</span>
+                <span className="font-mono text-brand-400 text-right">I or 9</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Eraser</span>
+                <span className="font-mono text-brand-400 text-right">E or 0</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Undo / Redo</span>
+                <span className="font-mono text-brand-400 text-right">Ctrl+Z / Ctrl+Shift+Z</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Delete Selection</span>
+                <span className="font-mono text-brand-400 text-right">Delete / Backspace</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Toggle Grid</span>
+                <span className="font-mono text-brand-400 text-right">G</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Toggle Snapping</span>
+                <span className="font-mono text-brand-400 text-right">S</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Pan Canvas</span>
+                <span className="font-mono text-brand-400 text-right">Space + Drag</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5">
+                <span className="text-dark-200">Nudge Elements</span>
+                <span className="font-mono text-brand-400 text-right">Arrows (Shift to speed-up)</span>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

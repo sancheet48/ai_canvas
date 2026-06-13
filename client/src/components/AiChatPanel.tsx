@@ -183,18 +183,20 @@ export const AiChatPanel: React.FC = () => {
   return (
     <>
       {/* 1. COLLAPSIBLE TOGGLE BUTTON */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="absolute top-24 right-6 p-3 rounded-2xl glass-panel text-brand-500 hover:text-white hover-scale shadow-2xl z-30 flex items-center justify-center border border-brand-500/20"
-        title="Toggle AI Panel"
-      >
-        {isOpen ? <ChevronRight className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
-      </button>
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-6 right-6 p-3 rounded-full bg-brand-600 hover:bg-brand-700 text-white hover-scale shadow-2xl z-30 flex items-center justify-center w-12 h-12 transition-all border border-brand-500/20"
+          title="Open AI Copilot Chat"
+        >
+          <Bot className="w-6 h-6" />
+        </button>
+      )}
 
       {/* 2. CHAT PANEL LAYOUT */}
       <div 
-        className={`absolute top-24 right-6 bottom-24 w-96 glass-panel rounded-3xl p-5 shadow-2xl z-30 flex flex-col gap-4 transition-all duration-300 transform ${
-          isOpen ? 'translate-x-0' : 'translate-x-[420px] pointer-events-none'
+        className={`fixed bottom-6 right-6 w-96 h-[600px] max-h-[calc(100vh-48px)] glass-panel rounded-3xl p-5 shadow-2xl z-35 flex flex-col gap-4 transition-all duration-300 transform ${
+          isOpen ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-10 opacity-0 scale-95 pointer-events-none'
         }`}
       >
         {/* Header Options */}
@@ -204,20 +206,31 @@ export const AiChatPanel: React.FC = () => {
             <h3 className="text-sm font-bold text-white">AI Visual Copilot</h3>
           </div>
           
-          {/* Provider Dropdown */}
-          <select
-            value={provider}
-            onChange={(e) => setProvider(e.target.value as any)}
-            className="bg-dark-900 border border-white/5 rounded-xl px-2 py-1 text-[11px] font-semibold text-dark-200 outline-none cursor-pointer focus:border-brand-500/30"
-          >
-            <option value="gemini">Gemini</option>
-            <option value="openai">OpenAI</option>
-            <option value="bedrock">Bedrock</option>
-          </select>
+          <div className="flex items-center gap-2">
+            {/* Provider Dropdown */}
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as any)}
+              className="bg-dark-900 border border-white/5 rounded-xl px-2 py-1 text-[11px] font-semibold text-dark-200 outline-none cursor-pointer focus:border-brand-500/30"
+            >
+              <option value="gemini">Gemini</option>
+              <option value="openai">OpenAI</option>
+              <option value="bedrock">Bedrock</option>
+            </select>
+            
+            {/* Minimize / Close Button */}
+            <button
+              onClick={() => setIsOpen(false)}
+              className="p-1 rounded-lg text-dark-200 hover:bg-dark-800 hover:text-white transition-colors"
+              title="Minimize panel"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* 3. CHAT MESSAGE THREAD */}
-        <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-3.5 max-h-[calc(100vh-340px)]">
+        <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-3.5">
           {messages.map((msg, index) => {
             const isAI = msg.role === 'assistant';
             const hasCanvasCode = msg.content.includes('```canvas-elements');

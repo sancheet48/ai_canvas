@@ -75,6 +75,7 @@ export const Board: React.FC = () => {
   } = useCanvasStore();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const socketRef = useRef<any>(null);
 
   // Viewport/Canvas dimensions
@@ -567,8 +568,28 @@ export const Board: React.FC = () => {
 
     else if (action === 'moving' || action === 'resizing' || action === 'rotating') {
       // Save changes to history (by force saving current elements to history)
-      setElements(elements); 
-      broadcastCanvasState(elements);
+      let finalElements = elements;
+      if (action === 'resizing' && selectedIds.length === 1) {
+        finalElements = elements.map(el => {
+          if (
+            el.id === selectedIds[0] &&
+            (el.type === 'rectangle' ||
+             el.type === 'ellipse' ||
+             el.type === 'diamond')
+          ) {
+            return {
+              ...el,
+              x: Math.min(el.x, el.x + el.width),
+              y: Math.min(el.y, el.y + el.height),
+              width: Math.abs(el.width),
+              height: Math.abs(el.height)
+            };
+          }
+          return el;
+        });
+      }
+      setElements(finalElements); 
+      broadcastCanvasState(finalElements);
     }
 
     else if (action === 'drawing' && tempDrawingElement) {
@@ -588,9 +609,35 @@ export const Board: React.FC = () => {
           text: 'Text here'
         }]);
       } else {
-        const finishedElements = [...elements, tempDrawingElement];
+        let normalizedElement = { ...tempDrawingElement };
+        if (
+          normalizedElement.type === 'rectangle' ||
+          normalizedElement.type === 'ellipse' ||
+          normalizedElement.type === 'diamond'
+        ) {
+          const x = normalizedElement.x;
+          const y = normalizedElement.y;
+          const w = normalizedElement.width;
+          const h = normalizedElement.height;
+          normalizedElement.x = Math.min(x, x + w);
+          normalizedElement.y = Math.min(y, y + h);
+          normalizedElement.width = Math.abs(w);
+          normalizedElement.height = Math.abs(h);
+        }
+
+        const finishedElements = [...elements, normalizedElement];
         setElements(finishedElements);
         broadcastCanvasState(finishedElements);
+
+        // Switch tool to selection and select the newly drawn shape
+        if (
+          normalizedElement.type === 'rectangle' ||
+          normalizedElement.type === 'ellipse' ||
+          normalizedElement.type === 'diamond'
+        ) {
+          setTool('selection');
+          setSelectedIds([normalizedElement.id]);
+        }
       }
       setTempDrawingElement(null);
     }
@@ -633,10 +680,20 @@ export const Board: React.FC = () => {
     } 
     // Otherwise, pan the canvas (scroll vertically and horizontally)
     else {
-      setPan({
-        x: pan.x - e.deltaX,
-        y: pan.y - e.deltaY
-      });
+      if (e.shiftKey) {
+        // Shift + scroll maps vertical wheel movement to horizontal panning
+        const dx = e.deltaX !== 0 ? e.deltaX : e.deltaY;
+        const dy = e.deltaX !== 0 ? e.deltaY : 0;
+        setPan({
+          x: pan.x - dx,
+          y: pan.y - dy
+        });
+      } else {
+        setPan({
+          x: pan.x - e.deltaX,
+          y: pan.y - e.deltaY
+        });
+      }
     }
   };
 
@@ -669,9 +726,21 @@ export const Board: React.FC = () => {
     setElements(nextElements);
     broadcastCanvasState(nextElements);
     
+    // Switch to selection tool and select the text element
+    setTool('selection');
+    setSelectedIds([editingTextElementId]);
+    
     setEditingTextElementId(null);
     setEditingTextVal('');
   };
+
+  // Focus and select the default "Text here" text when text editor opens
+  useEffect(() => {
+    if (editingTextElementId && textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.select();
+    }
+  }, [editingTextElementId]);
 
   // 7. KEYBOARD HOTKEYS & ARROWS NUDGES
   useEffect(() => {
@@ -912,9 +981,11 @@ export const Board: React.FC = () => {
           style={{ left: textInputPos.x, top: textInputPos.y }}
         >
           <textarea
+            ref={textareaRef}
             autoFocus
             value={editingTextVal}
             onChange={(e) => setEditingTextVal(e.target.value)}
+            onFocus={(e) => e.target.select()}
             className="bg-dark-900 text-xs text-white p-2 border border-white/5 rounded-lg outline-none w-56 h-20 resize font-sans"
           />
           <div className="flex justify-end gap-1.5">
@@ -926,6 +997,7 @@ export const Board: React.FC = () => {
                   setElements(nextElements);
                   broadcastCanvasState(nextElements);
                 }
+                setTool('selection');
                 setEditingTextElementId(null);
               }}
               className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-dark-900 border border-white/5 text-dark-200"

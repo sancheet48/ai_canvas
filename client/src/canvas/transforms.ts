@@ -87,19 +87,24 @@ export function isPointOverElement(point: Point, element: CanvasElement): boolea
   switch (type) {
     case 'rectangle':
     case 'text':
-    case 'image':
+    case 'image': {
+      const minX = Math.min(x, x + width);
+      const maxX = Math.max(x, x + width);
+      const minY = Math.min(y, y + height);
+      const maxY = Math.max(y, y + height);
       return (
-        localPoint.x >= x &&
-        localPoint.x <= x + width &&
-        localPoint.y >= y &&
-        localPoint.y <= y + height
+        localPoint.x >= minX &&
+        localPoint.x <= maxX &&
+        localPoint.y >= minY &&
+        localPoint.y <= maxY
       );
+    }
       
     case 'ellipse': {
-      const rx = width / 2;
-      const ry = height / 2;
-      const cx = x + rx;
-      const cy = y + ry;
+      const rx = Math.abs(width) / 2;
+      const ry = Math.abs(height) / 2;
+      const cx = x + width / 2;
+      const cy = y + height / 2;
       if (rx === 0 || ry === 0) return false;
       const term1 = Math.pow(localPoint.x - cx, 2) / Math.pow(rx, 2);
       const term2 = Math.pow(localPoint.y - cy, 2) / Math.pow(ry, 2);
@@ -109,9 +114,12 @@ export function isPointOverElement(point: Point, element: CanvasElement): boolea
     case 'diamond': {
       const cx = x + width / 2;
       const cy = y + height / 2;
-      // Diamond equation: |x - cx| / (w/2) + |y - cy| / (h/2) <= 1
-      const dx = Math.abs(localPoint.x - cx) / (width / 2);
-      const dy = Math.abs(localPoint.y - cy) / (height / 2);
+      const rx = Math.abs(width) / 2;
+      const ry = Math.abs(height) / 2;
+      if (rx === 0 || ry === 0) return false;
+      // Diamond equation: |x - cx| / rx + |y - cy| / ry <= 1
+      const dx = Math.abs(localPoint.x - cx) / rx;
+      const dy = Math.abs(localPoint.y - cy) / ry;
       return dx + dy <= 1;
     }
     

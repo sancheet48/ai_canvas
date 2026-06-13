@@ -13,7 +13,9 @@ import {
   ArrowRight,
   LogOut,
   Settings,
-  Sliders
+  Sliders,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -77,7 +79,12 @@ export const Explore: React.FC = () => {
   // 2. CREATE NEW BOARD
   const handleCreateBoard = async () => {
     if (creating) return;
+    const titleInput = prompt("Enter a name for your new whiteboard:");
+    if (titleInput === null) return; // User clicked Cancel in the browser prompt
+
+    const boardTitle = titleInput.trim() || 'Untitled Board';
     setCreating(true);
+
     try {
       const res = await fetch('/api/boards', {
         method: 'POST',
@@ -86,7 +93,7 @@ export const Explore: React.FC = () => {
           'Authorization': `Bearer ${accessToken}`
         },
         body: JSON.stringify({
-          title: 'New Whiteboard Sketch',
+          title: boardTitle,
           data: [],
           visibility: 'private'
         })
@@ -102,6 +109,64 @@ export const Explore: React.FC = () => {
       alert('Failed to connect to backend.');
     } finally {
       setCreating(false);
+    }
+  };
+
+  // 2.5 RENAME BOARD
+  const handleRenameBoard = async (e: React.MouseEvent, boardId: string, currentTitle: string) => {
+    e.stopPropagation(); // Prevent navigating to the board page
+    const newTitle = prompt("Enter a new name for this whiteboard:", currentTitle);
+    if (newTitle === null) return; // Cancelled
+    const trimmedTitle = newTitle.trim();
+    if (!trimmedTitle) {
+      alert("Board name cannot be empty.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/boards/${boardId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ title: trimmedTitle })
+      });
+      if (res.ok) {
+        setUserBoards(prev => prev.map(b => b.id === boardId ? { ...b, title: trimmedTitle } : b));
+        setPublicBoards(prev => prev.map(b => b.id === boardId ? { ...b, title: trimmedTitle } : b));
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to rename board.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to connect to server.");
+    }
+  };
+
+  // 2.6 DELETE BOARD
+  const handleDeleteBoard = async (e: React.MouseEvent, boardId: string) => {
+    e.stopPropagation(); // Prevent navigating to the board page
+    if (!confirm("Are you sure you want to permanently delete this whiteboard? This action cannot be undone.")) return;
+
+    try {
+      const res = await fetch(`/api/boards/${boardId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      if (res.ok) {
+        setUserBoards(prev => prev.filter(b => b.id !== boardId));
+        setPublicBoards(prev => prev.filter(b => b.id !== boardId));
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to delete board.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to connect to server.");
     }
   };
 
@@ -204,9 +269,22 @@ export const Explore: React.FC = () => {
                     <span className="text-[9px] font-bold text-brand-500 px-2 py-0.5 bg-brand-500/10 rounded-full border border-brand-500/10 uppercase tracking-wide">
                       {b.visibility}
                     </span>
-                    <span className="text-[9px] text-dark-200 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {new Date(b.updated_at).toLocaleDateString()}
-                    </span>
+                    <div className="flex items-center gap-1.5 z-10">
+                      <button
+                        onClick={(e) => handleRenameBoard(e, b.id, b.title)}
+                        className="p-1 rounded bg-dark-900 border border-white/5 text-dark-200 hover:text-white hover:border-brand-500/30 transition-colors"
+                        title="Rename whiteboard"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteBoard(e, b.id)}
+                        className="p-1 rounded bg-dark-900 border border-white/5 text-red-500 hover:bg-red-500/10 transition-colors"
+                        title="Delete whiteboard"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-white group-hover:text-brand-500 transition-colors">{b.title}</h3>

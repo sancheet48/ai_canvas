@@ -1,0 +1,14 @@
+{
+  "name": "whiteboard-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "dev": "npx concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "seed:admin": "npm run seed:admin --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}

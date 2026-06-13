@@ -7,8 +7,6 @@ import {
   FileText, 
   FileJson, 
   Share2, 
-  Linkedin, 
-  Twitter, 
   Check, 
   Copy, 
   Loader2,
@@ -21,7 +19,7 @@ import { useCanvasStore } from '../store/useCanvasStore';
 import { useAuthStore } from '../store/useAuthStore';
 
 interface SocialExportModalProps {
-  canvasRef: React.RefObject<HTMLCanvasElement>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
   onClose: () => void;
 }
 
@@ -346,7 +344,11 @@ export const SocialExportModal: React.FC<SocialExportModalProps> = ({ canvasRef,
                 <div className="bg-dark-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-3">
                   <div className="flex items-center justify-between border-b border-dark-800 pb-2">
                     <div className="flex items-center gap-2 text-white font-semibold text-xs">
-                      <Linkedin className="w-4 h-4 text-blue-500 fill-blue-500" /> LinkedIn Share
+                      <svg className="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
+                        <rect width="4" height="12" x="2" y="9" />
+                        <circle cx="4" cy="4" r="2" />
+                      </svg> LinkedIn Share
                     </div>
                     {isProviderConnected('linkedin') ? (
                       <button
@@ -393,7 +395,9 @@ export const SocialExportModal: React.FC<SocialExportModalProps> = ({ canvasRef,
                 <div className="bg-dark-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-3">
                   <div className="flex items-center justify-between border-b border-dark-800 pb-2">
                     <div className="flex items-center gap-2 text-white font-semibold text-xs">
-                      <Twitter className="w-4 h-4 text-sky-400 fill-sky-400" /> Twitter/X Thread
+                      <svg className="w-4 h-4 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />
+                      </svg> Twitter/X Thread
                     </div>
                     {isProviderConnected('twitter') ? (
                       <button

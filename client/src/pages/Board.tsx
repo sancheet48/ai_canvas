@@ -11,7 +11,6 @@ import {
   Settings, 
   Grid,
   Bot,
-  Export,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -37,6 +36,8 @@ import {
   rotatePoint
 } from '../canvas/transforms';
 import { drawElement, drawGrid, drawSelectionBox, drawCollaboratorCursor } from '../canvas/renderer';
+
+const generateId = () => Math.random().toString(36).substring(2, 9);
 
 export const Board: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -121,7 +122,7 @@ export const Board: React.FC = () => {
     const socket = io('/', {
       path: '/socket.io',
       transports: ['websocket'],
-      credentials: true
+      withCredentials: true
     });
     socketRef.current = socket;
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   BringToFront, 
   SendToBack, 
@@ -6,11 +6,13 @@ import {
   Paintbrush, 
   Maximize2, 
   Grid3X3,
-  Sliders
+  Sliders,
+  ChevronLeft
 } from 'lucide-react';
 import { useCanvasStore, DashStyle } from '../store/useCanvasStore';
 
 export const StylePanel: React.FC = () => {
+  const [isMinimized, setIsMinimized] = useState(false);
   const {
     elements,
     selectedIds,
@@ -57,6 +59,18 @@ export const StylePanel: React.FC = () => {
     setElements([...selected, ...unselected]);
   };
 
+  if (isMinimized) {
+    return (
+      <button
+        onClick={() => setIsMinimized(false)}
+        className="absolute top-24 left-6 p-3 rounded-full bg-dark-900 border border-white/5 text-brand-500 hover:text-white hover-scale shadow-2xl z-30 flex items-center justify-center w-12 h-12"
+        title="Show Styles Panel"
+      >
+        <Sliders className="w-6 h-6" />
+      </button>
+    );
+  }
+
   return (
     <div className="absolute top-24 left-6 w-72 glass-panel rounded-3xl p-5 shadow-2xl z-30 flex flex-col gap-6">
       <div className="flex items-center justify-between border-b border-dark-800 pb-3">
@@ -64,11 +78,21 @@ export const StylePanel: React.FC = () => {
           <Sliders className="w-4 h-4 text-brand-500" />
           {isSelected ? 'Selection Styles' : 'Canvas Defaults'}
         </h3>
-        {isSelected && (
-          <span className="text-[10px] bg-brand-600/20 text-brand-500 font-semibold px-2 py-0.5 rounded-full border border-brand-500/20">
-            {selectedIds.length} Selected
-          </span>
-        )}
+        
+        <div className="flex items-center gap-2">
+          {isSelected && (
+            <span className="text-[10px] bg-brand-600/20 text-brand-500 font-semibold px-2 py-0.5 rounded-full border border-brand-500/20">
+              {selectedIds.length} Selected
+            </span>
+          )}
+          <button
+            onClick={() => setIsMinimized(true)}
+            className="p-1 rounded-lg text-dark-200 hover:bg-dark-800 hover:text-white transition-colors"
+            title="Minimize Panel"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* 1. STROKE COLOR */}

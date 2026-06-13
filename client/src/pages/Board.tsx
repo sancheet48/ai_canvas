@@ -81,7 +81,7 @@ export const Board: React.FC = () => {
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   // Action drag state variables
-  const [action, setAction] = useState<'none' | 'drawing' | 'moving' | 'resizing' | 'rotating' | 'panning' | 'selecting'>('none');
+  const [action, setAction] = useState<'none' | 'drawing' | 'moving' | 'resizing' | 'rotating' | 'panning' | 'selecting' | 'erasing'>('none');
   const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
   const [resizeHandleIndex, setResizeHandleIndex] = useState<number | null>(null);
   const [draggingStartOffsets, setDraggingStartOffsets] = useState<{ id: string; dx: number; dy: number }[]>([]);
@@ -249,6 +249,7 @@ export const Board: React.FC = () => {
 
     // Draw Elements
     elements.forEach(el => {
+      if (el.id === editingTextElementId) return;
       const rc = rough.canvas(canvas);
       drawElement(ctx, rc, el);
     });
@@ -419,6 +420,7 @@ export const Board: React.FC = () => {
     }
     // Eraser flow
     else {
+      setAction('erasing');
       // Find element clicked and delete it
       const hitElement = [...elements].reverse().find(el => isPointOverElement(worldPt, el));
       if (hitElement) {
@@ -445,6 +447,16 @@ export const Board: React.FC = () => {
     }
 
     if (action === 'none') return;
+
+    if (action === 'erasing') {
+      const hitElement = [...elements].reverse().find(el => isPointOverElement(worldPt, el));
+      if (hitElement) {
+        const nextElements = elements.filter(el => el.id !== hitElement.id);
+        setElements(nextElements);
+        broadcastCanvasState(nextElements);
+      }
+      return;
+    }
 
     if (action === 'panning') {
       const dx = e.clientX - startPoint.x;
@@ -588,35 +600,44 @@ export const Board: React.FC = () => {
     setDraggingStartOffsets([]);
   };
 
-  // 5. MOUSE WHEEL ZOOM HANDLERS
+  // 5. MOUSE WHEEL PAN & ZOOM HANDLERS
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
-    const zoomIntensity = 0.05;
     
-    // Zoom centered around cursor coordinate
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const cursorX = e.clientX - rect.left;
-    const cursorY = e.clientY - rect.top;
+    // Zoom if Ctrl key is pressed (or pinch-to-zoom on touchpads)
+    if (e.ctrlKey || e.metaKey) {
+      const zoomIntensity = 0.05;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const cursorX = e.clientX - rect.left;
+      const cursorY = e.clientY - rect.top;
 
-    const worldPt = screenToWorld(cursorX, cursorY, pan, zoom);
+      const worldPt = screenToWorld(cursorX, cursorY, pan, zoom);
 
-    const nextZoom = e.deltaY < 0 
-      ? zoom * (1 + zoomIntensity) 
-      : zoom * (1 - zoomIntensity);
-    
-    // Clamp zoom
-    const clampedZoom = Math.max(0.1, Math.min(10, nextZoom));
+      const nextZoom = e.deltaY < 0 
+        ? zoom * (1 + zoomIntensity) 
+        : zoom * (1 - zoomIntensity);
+      
+      // Clamp zoom
+      const clampedZoom = Math.max(0.1, Math.min(10, nextZoom));
 
-    // Shift pan offset to center around world coordinate
-    const nextPan = {
-      x: cursorX - worldPt.x * clampedZoom,
-      y: cursorY - worldPt.y * clampedZoom
-    };
+      // Shift pan offset to center around world coordinate
+      const nextPan = {
+        x: cursorX - worldPt.x * clampedZoom,
+        y: cursorY - worldPt.y * clampedZoom
+      };
 
-    setZoom(clampedZoom);
-    setPan(nextPan);
+      setZoom(clampedZoom);
+      setPan(nextPan);
+    } 
+    // Otherwise, pan the canvas (scroll vertically and horizontally)
+    else {
+      setPan({
+        x: pan.x - e.deltaX,
+        y: pan.y - e.deltaY
+      });
+    }
   };
 
   // 6. TEXT SUBMIT ACTIONS
@@ -894,7 +915,7 @@ export const Board: React.FC = () => {
             autoFocus
             value={editingTextVal}
             onChange={(e) => setEditingTextVal(e.target.value)}
-            className="bg-dark-900 text-xs text-white p-2 border border-white/5 rounded-lg outline-none w-56 h-20 resize-none font-sans"
+            className="bg-dark-900 text-xs text-white p-2 border border-white/5 rounded-lg outline-none w-56 h-20 resize font-sans"
           />
           <div className="flex justify-end gap-1.5">
             <button

@@ -126,13 +126,36 @@ export function drawElement(ctx: CanvasRenderingContext2D, rc: any, element: Can
 
     case 'text':
       if (text) {
-        ctx.fillStyle = strokeColor;
-        ctx.font = `bold ${20}px 'Outfit', 'Inter', sans-serif`;
+        const fontFam = element.fontFamily || "'Outfit', 'Inter', sans-serif";
+        const fontW = element.fontWeight || 'normal';
+        const fontS = element.fontStyle || 'normal';
+        
+        ctx.font = `${fontS} ${fontW} 20px ${fontFam}`;
         ctx.textBaseline = 'top';
         
         // Multi-line rendering split by newline
         const lines = text.split('\n');
         const lineHeight = 26;
+
+        // Draw highlight background pills behind each line of text if fillColor is active
+        if (fillColor && fillColor !== 'transparent') {
+          ctx.fillStyle = fillColor;
+          for (let i = 0; i < lines.length; i++) {
+            const lineText = lines[i];
+            if (lineText.trim() !== '') {
+              const textWidth = ctx.measureText(lineText).width;
+              const px = 6; // padding x
+              const py = 3; // padding y
+              
+              ctx.beginPath();
+              // Standard roundRect drawing API
+              ctx.roundRect(x - px, y + i * lineHeight - py, textWidth + px * 2, 20 + py * 2, 6);
+              ctx.fill();
+            }
+          }
+        }
+        
+        ctx.fillStyle = strokeColor;
         for (let i = 0; i < lines.length; i++) {
           ctx.fillText(lines[i], x, y + i * lineHeight);
         }
@@ -169,7 +192,8 @@ export function drawElement(ctx: CanvasRenderingContext2D, rc: any, element: Can
 // 4. DRAW SNAP GRID PATTERN
 export function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, pan: { x: number; y: number }, zoom: number) {
   ctx.save();
-  ctx.strokeStyle = '#1f2937'; // dark grid lines
+  const isDark = document.documentElement.classList.contains('dark');
+  ctx.strokeStyle = isDark ? '#1f2937' : '#e5e7eb'; // adaptive grid lines color
   ctx.lineWidth = 0.5;
 
   const startX = -pan.x / zoom;

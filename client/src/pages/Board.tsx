@@ -17,7 +17,10 @@ import {
   Sliders,
   Sparkles,
   Keyboard,
-  X
+  X,
+  Save,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 import { useCanvasStore, CanvasElement, ToolType } from '../store/useCanvasStore';
@@ -107,6 +110,13 @@ export const Board: React.FC = () => {
   const [boardVisibility, setBoardVisibility] = useState<'private' | 'public' | 'link-only'>('private');
   const [boardShareToken, setBoardShareToken] = useState('');
 
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'idle'>('idle');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
+  });
+
+  const isLoadedRef = useRef(false);
+
   const boardId = id || 'local-fallback-board';
 
   // 1. WINDOW RESIZE EVENTS
@@ -179,38 +189,86 @@ export const Board: React.FC = () => {
     }
   };
 
-  // Fetch board metadata/visibility settings from database
+  // Initialize theme on mount
   useEffect(() => {
-    if (!accessToken || !id) return;
-    
-    const loadBoard = async () => {
-      try {
-        const res = await fetch(`/api/boards/${id}`, {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        const boardData = await res.json();
-        if (res.ok) {
-          setBoardVisibility(boardData.visibility);
-          setBoardShareToken(boardData.share_token);
-          if (boardData.data) {
-            setElements(boardData.data, true); // load board elements without pushing history
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load board from server:', err);
-      }
-    };
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    if (savedTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
 
-    loadBoard();
+  // Fetch board metadata/visibility settings from database or local storage fallback
+  useEffect(() => {
+    isLoadedRef.current = false;
+    
+    if (id) {
+      if (!accessToken) return;
+      
+      const loadBoard = async () => {
+        try {
+          const res = await fetch(`/api/boards/${id}`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+          const boardData = await res.json();
+          if (res.ok) {
+            setBoardVisibility(boardData.visibility);
+            setBoardShareToken(boardData.share_token);
+            if (boardData.data) {
+              setElements(boardData.data, true); // load board elements without pushing history
+            }
+          }
+        } catch (err) {
+          console.error('Failed to load board from server:', err);
+        } finally {
+          isLoadedRef.current = true;
+          setSaveStatus('idle');
+        }
+      };
+
+      loadBoard();
+    } else {
+      // Local storage fallback for guest board
+      const saved = localStorage.getItem('local-fallback-board-data');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setElements(parsed, true);
+        } catch (e) {
+          console.error('Failed to parse local fallback board data:', e);
+        }
+      } else {
+        setElements([], true);
+      }
+      isLoadedRef.current = true;
+      setSaveStatus('idle');
+    }
   }, [id, accessToken]);
 
-  // Periodic autosave to database
+  // Periodic autosave to database or local storage
   useEffect(() => {
-    if (!accessToken || !id || elements.length === 0) return;
+    if (!isLoadedRef.current) return;
+
+    setSaveStatus('saving');
+
+    if (!id) {
+      // Local storage autosave for guest board
+      const timer = setTimeout(() => {
+        localStorage.setItem('local-fallback-board-data', JSON.stringify(elements));
+        setSaveStatus('saved');
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+
+    if (!accessToken) {
+      setSaveStatus('error');
+      return;
+    }
 
     const timer = setTimeout(async () => {
       try {
-        await fetch(`/api/boards/${id}`, {
+        const res = await fetch(`/api/boards/${id}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -218,14 +276,66 @@ export const Board: React.FC = () => {
           },
           body: JSON.stringify({ data: elements })
         });
-        console.log('Autosaved drawing state.');
+        if (res.ok) {
+          setSaveStatus('saved');
+        } else {
+          setSaveStatus('error');
+        }
       } catch (err) {
         console.error('Autosave failed:', err);
+        setSaveStatus('error');
       }
-    }, 3000); // 3 seconds debounced autosave
+    }, 2000); // 2 seconds debounced autosave
 
     return () => clearTimeout(timer);
   }, [elements, id, accessToken]);
+
+  // Manual save handler
+  const handleManualSave = async () => {
+    setSaveStatus('saving');
+    
+    if (!id) {
+      localStorage.setItem('local-fallback-board-data', JSON.stringify(elements));
+      setSaveStatus('saved');
+      return;
+    }
+
+    if (!accessToken) {
+      setSaveStatus('error');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/boards/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ data: elements })
+      });
+      if (res.ok) {
+        setSaveStatus('saved');
+      } else {
+        setSaveStatus('error');
+      }
+    } catch (err) {
+      console.error('Manual save failed:', err);
+      setSaveStatus('error');
+    }
+  };
+
+  // Theme toggle helper
+  const handleToggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    if (nextTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', nextTheme);
+    setTheme(nextTheme);
+  };
 
   // 3. CANVAS REDRAW CYCLE
   useEffect(() => {
@@ -890,7 +1000,19 @@ export const Board: React.FC = () => {
           </button>
           <div className="px-2">
             <h1 className="text-xs font-bold text-white tracking-wide">AI Whiteboard Canvas</h1>
-            <span className="text-[9px] text-dark-200 uppercase font-mono">{boardVisibility} room</span>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[9px] text-dark-200 uppercase font-mono">{boardVisibility} room</span>
+              <span className="text-[9px] text-dark-300">•</span>
+              <span className={`text-[9px] font-medium transition-all ${
+                saveStatus === 'saved' ? 'text-green-500' :
+                saveStatus === 'saving' ? 'text-brand-500 animate-pulse' :
+                saveStatus === 'error' ? 'text-red-500' : 'text-dark-300'
+              }`}>
+                {saveStatus === 'saved' ? 'Autosaved' :
+                 saveStatus === 'saving' ? 'Saving...' :
+                 saveStatus === 'error' ? 'Save failed' : 'All saved'}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -921,6 +1043,14 @@ export const Board: React.FC = () => {
             <Redo className="w-4 h-4" />
           </button>
 
+          <button
+            onClick={handleManualSave}
+            className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 hover:text-white transition-colors"
+            title="Save changes manually"
+          >
+            <Save className="w-4 h-4" />
+          </button>
+
           <div className="w-[1px] h-5 bg-dark-800 mx-1" />
 
           <button
@@ -937,6 +1067,14 @@ export const Board: React.FC = () => {
             title="Export files & publish social posts"
           >
             <Sparkles className="w-3.5 h-3.5" /> Export
+          </button>
+
+          <button
+            onClick={handleToggleTheme}
+            className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 hover:text-white transition-colors animate-in spin-in-12 duration-300"
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />}
           </button>
 
           <div className="w-[1px] h-5 bg-dark-800 mx-1" />
@@ -1121,6 +1259,14 @@ export const Board: React.FC = () => {
               <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
                 <span className="text-dark-200">Pan Canvas</span>
                 <span className="font-mono text-brand-400 text-right">Space + Drag</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Horizontal Scroll</span>
+                <span className="font-mono text-brand-400 text-right">Shift + Scroll Wheel</span>
+              </div>
+              <div className="grid grid-cols-2 py-1.5 border-b border-dark-900/50">
+                <span className="text-dark-200">Touchpad Pan</span>
+                <span className="font-mono text-brand-400 text-right">Two-finger Swipe</span>
               </div>
               <div className="grid grid-cols-2 py-1.5">
                 <span className="text-dark-200">Nudge Elements</span>

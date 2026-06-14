@@ -15,7 +15,9 @@ import {
   Settings,
   Sliders,
   Edit,
-  Trash2
+  Trash2,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -40,6 +42,31 @@ export const Explore: React.FC = () => {
   const [loadingUser, setLoadingUser] = useState(false);
   const [creating, setCreating] = useState(false);
   const [forkingId, setForkingId] = useState<string | null>(null);
+
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
+  });
+
+  // Initialize theme on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    if (savedTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  const handleToggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    if (nextTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', nextTheme);
+    setTheme(nextTheme);
+  };
 
   // 1. LOAD EXPLORE DATA
   useEffect(() => {
@@ -220,6 +247,14 @@ export const Explore: React.FC = () => {
             <User className="w-4 h-4 text-brand-500" />
             <span>{user?.email}</span>
           </div>
+
+          <button
+            onClick={handleToggleTheme}
+            className="p-2.5 rounded-xl bg-dark-900 border border-white/5 text-dark-200 hover:text-white hover:border-brand-500/30 transition-colors animate-in spin-in-12 duration-300"
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />}
+          </button>
 
           <button
             onClick={() => logout().then(() => navigate('/login'))}

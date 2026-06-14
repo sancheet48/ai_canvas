@@ -22,6 +22,9 @@ export interface CanvasElement {
   text?: string; // for text
   imageUrl?: string; // for image upload
   seed: number;
+  fontFamily?: string;
+  fontWeight?: 'normal' | 'bold';
+  fontStyle?: 'normal' | 'italic';
 }
 
 interface HistoryState {
@@ -43,6 +46,9 @@ interface CanvasState {
   strokeWidth: number;
   dashStyle: DashStyle;
   roughness: number;
+  fontFamily: string;
+  fontWeight: 'normal' | 'bold';
+  fontStyle: 'normal' | 'italic';
 
   // Viewport transforms
   pan: { x: number; y: number };
@@ -68,6 +74,9 @@ interface CanvasState {
   setStrokeWidth: (width: number) => void;
   setDashStyle: (style: DashStyle) => void;
   setRoughness: (roughness: number) => void;
+  setFontFamily: (fontFamily: string) => void;
+  setFontWeight: (fontWeight: 'normal' | 'bold') => void;
+  setFontStyle: (fontStyle: 'normal' | 'italic') => void;
 
   // Viewport Actions
   setPan: (pan: { x: number; y: number } | ((prev: { x: number; y: number }) => { x: number; y: number })) => void;
@@ -92,6 +101,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   strokeWidth: 2,
   dashStyle: 'solid',
   roughness: 1,
+  fontFamily: "'Outfit', 'Inter', sans-serif",
+  fontWeight: 'normal',
+  fontStyle: 'normal',
 
   // Viewport defaults
   pan: { x: 0, y: 0 },
@@ -244,6 +256,36 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     if (selectedIds.length > 0) {
       get().setElements(
         elements.map(el => (selectedIds.includes(el.id) ? { ...el, roughness } : el))
+      );
+    }
+  },
+
+  setFontFamily: (fontFamily) => {
+    set({ fontFamily });
+    const { selectedIds, elements } = get();
+    if (selectedIds.length > 0) {
+      get().setElements(
+        elements.map(el => (selectedIds.includes(el.id) ? { ...el, fontFamily } : el))
+      );
+    }
+  },
+
+  setFontWeight: (fontWeight) => {
+    set({ fontWeight });
+    const { selectedIds, elements } = get();
+    if (selectedIds.length > 0) {
+      get().setElements(
+        elements.map(el => (selectedIds.includes(el.id) ? { ...el, fontWeight } : el))
+      );
+    }
+  },
+
+  setFontStyle: (fontStyle) => {
+    set({ fontStyle });
+    const { selectedIds, elements } = get();
+    if (selectedIds.length > 0) {
+      get().setElements(
+        elements.map(el => (selectedIds.includes(el.id) ? { ...el, fontStyle } : el))
       );
     }
   },

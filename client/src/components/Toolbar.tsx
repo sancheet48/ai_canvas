@@ -6,6 +6,9 @@ import {
   Zap, 
   GitCommit, 
   ArrowRight, 
+  ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   Pencil, 
   Type, 
   Image as ImageIcon, 
@@ -26,7 +29,8 @@ export const Toolbar: React.FC = () => {
     snapToGrid,
     setSnapToGrid,
     zoom, 
-    setZoom 
+    setZoom,
+    setPan
   } = useCanvasStore();
 
   const tools: { type: ToolType; label: string; icon: React.ReactNode; hotkey: string }[] = [
@@ -66,6 +70,38 @@ export const Toolbar: React.FC = () => {
           title="Zoom In"
         >
           <ZoomIn className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Scroll / Panning controls */}
+      <div className="flex items-center gap-1 p-1.5 rounded-2xl glass-panel shadow-2xl">
+        <button
+          onClick={() => setPan(p => ({ ...p, x: p.x + 100 }))}
+          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors"
+          title="Scroll Left"
+        >
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => setPan(p => ({ ...p, y: p.y + 100 }))}
+          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors"
+          title="Scroll Up"
+        >
+          <ArrowUp className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => setPan(p => ({ ...p, y: p.y - 100 }))}
+          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors"
+          title="Scroll Down"
+        >
+          <ArrowDown className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => setPan(p => ({ ...p, x: p.x - 100 }))}
+          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors"
+          title="Scroll Right"
+        >
+          <ArrowRight className="w-4 h-4" />
         </button>
       </div>
 

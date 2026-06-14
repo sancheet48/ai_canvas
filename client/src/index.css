@@ -2,9 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Light theme by default */
+  --color-dark-50: #0b0f19;
+  --color-dark-100: #111827;
+  --color-dark-200: #1f2937;
+  --color-dark-800: #e5e7eb;
+  --color-dark-900: #f3f4f6;
+  --color-dark-950: #f9fafb;
+  
+  --border-overlay: rgba(0, 0, 0, 0.08);
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-card-bg: rgba(243, 244, 246, 0.6);
+}
+
+.dark {
+  /* Dark theme */
+  --color-dark-50: #f9fafb;
+  --color-dark-100: #f3f4f6;
+  --color-dark-200: #e5e7eb;
+  --color-dark-800: #1f2937;
+  --color-dark-900: #111827;
+  --color-dark-950: #0b0f19;
+  
+  --border-overlay: rgba(255, 255, 255, 0.08);
+  --glass-bg: rgba(17, 24, 39, 0.75);
+  --glass-card-bg: rgba(31, 41, 55, 0.5);
+}
+
 @layer base {
   body {
-    @apply bg-dark-950 text-dark-100 font-sans antialiased overflow-hidden select-none;
+    @apply bg-dark-950 text-dark-100 font-sans antialiased overflow-hidden select-none transition-colors duration-200;
   }
 }
 
@@ -29,15 +57,62 @@
 
 /* Glassmorphism utility classes */
 .glass-panel {
-  background: rgba(17, 24, 39, 0.75);
+  background: var(--glass-bg);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-overlay);
 }
 
 .glass-card {
-  background: rgba(31, 41, 55, 0.5);
+  background: var(--glass-card-bg);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-overlay);
+}
+
+/* Light mode overrides for scrollbars and colors */
+:root:not(.dark) ::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+:root:not(.dark) ::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+}
+
+:root:not(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Light mode border opacity adjustments */
+:root:not(.dark) [class*="border-white/5"] {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root:not(.dark) [class*="border-white/10"] {
+  border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+:root:not(.dark) [class*="bg-dark-950/40"] {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root:not(.dark) [class*="bg-dark-950/60"] {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root:not(.dark) [class*="bg-dark-950/80"] {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+}
+
+:root:not(.dark) [class*="bg-dark-900/60"] {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root:not(.dark) [class*="placeholder-dark-200"]::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Ensure white text becomes dark in light mode, except on solid background components */
+:root:not(.dark) .text-white:not([class*="bg-brand-"]):not([class*="bg-red-"]):not([class*="bg-green-"]):not([class*="bg-blue-"]):not([class*="bg-indigo-"]):not([class*="bg-gradient-"]):not(.text-white-forced) {
+  color: #111827 !important;
 }
 
 /* Micro-animations */

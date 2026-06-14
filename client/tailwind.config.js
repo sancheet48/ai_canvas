@@ -12,12 +12,12 @@ export default {
       },
       colors: {
         dark: {
-          50: '#f9fafb',
-          100: '#f3f4f6',
-          200: '#e5e7eb',
-          800: '#1f2937',
-          900: '#111827',
-          950: '#0b0f19',
+          50: 'var(--color-dark-50)',
+          100: 'var(--color-dark-100)',
+          200: 'var(--color-dark-200)',
+          800: 'var(--color-dark-800)',
+          900: 'var(--color-dark-900)',
+          950: 'var(--color-dark-950)',
         },
         brand: {
           50: '#f5f3ff',

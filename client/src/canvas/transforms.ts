@@ -87,7 +87,8 @@ export function isPointOverElement(point: Point, element: CanvasElement): boolea
   switch (type) {
     case 'rectangle':
     case 'text':
-    case 'image': {
+    case 'image':
+    case 'document': {
       const minX = Math.min(x, x + width);
       const maxX = Math.max(x, x + width);
       const minY = Math.min(y, y + height);

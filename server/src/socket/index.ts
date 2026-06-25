@@ -97,6 +97,12 @@ export function setupSocketIO(server: any) {
       socket.to(boardId).emit('canvas-synced', elements);
     });
 
+    // Document rich-text content sync
+    socket.on('document-sync', (data: { boardId: string; content: string }) => {
+      const { boardId, content } = data;
+      socket.to(boardId).emit('document-synced', content);
+    });
+
     socket.on('disconnect', () => {
       activeConnectionsCount--;
       console.log(`Socket disconnected: ${socket.id}. Total active: ${activeConnectionsCount}`);

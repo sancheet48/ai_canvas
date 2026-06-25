@@ -189,7 +189,7 @@ router.get('/:id', async (req: MaybeAuthRequest, res) => {
 // 6. UPDATE BOARD (Title, Data, etc.)
 router.patch('/:id', verifyJWT, async (req: AuthRequest, res) => {
   const { id } = req.params;
-  const { title, description, data, thumbnail_url, allowComments, allowFork } = req.body;
+  const { title, description, data, thumbnail_url, allowComments, allowFork, document_content } = req.body;
   const userId = req.user!.id;
 
   try {
@@ -241,6 +241,10 @@ router.patch('/:id', verifyJWT, async (req: AuthRequest, res) => {
     if (allowFork !== undefined) {
       updates.push(`allow_fork = $${paramIndex++}`);
       values.push(allowFork);
+    }
+    if (document_content !== undefined) {
+      updates.push(`document_content = $${paramIndex++}`);
+      values.push(document_content);
     }
 
     if (updates.length === 0) {

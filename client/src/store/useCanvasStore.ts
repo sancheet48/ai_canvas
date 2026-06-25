@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type ElementType = 'rectangle' | 'ellipse' | 'diamond' | 'line' | 'arrow' | 'freehand' | 'text' | 'image';
+export type ElementType = 'rectangle' | 'ellipse' | 'diamond' | 'line' | 'arrow' | 'freehand' | 'text' | 'image' | 'document';
 export type DashStyle = 'solid' | 'dashed' | 'dotted';
 export type ToolType = ElementType | 'selection' | 'eraser';
 
@@ -26,6 +26,8 @@ export interface CanvasElement {
   fontWeight?: 'normal' | 'bold';
   fontStyle?: 'normal' | 'italic';
   pageIndex?: number;
+  collapsed?: boolean;
+  expandedHeight?: number;
 }
 
 interface HistoryState {
@@ -43,6 +45,8 @@ interface CanvasState {
   canvasMode: 'infinite' | 'pages';
   currentPage: number;
   totalPages: number;
+  editorMode: 'canvas' | 'document';
+  documentContent: string;
   
   // Default style state
   strokeColor: string;
@@ -77,6 +81,8 @@ interface CanvasState {
   setTotalPages: (total: number) => void;
   addPage: () => void;
   deletePage: (pageIndex: number) => void;
+  setEditorMode: (mode: 'canvas' | 'document') => void;
+  setDocumentContent: (content: string) => void;
   
   // Style actions
   setStrokeColor: (color: string) => void;
@@ -108,6 +114,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   canvasMode: 'pages',
   currentPage: 1,
   totalPages: 1,
+  editorMode: 'canvas',
+  documentContent: '',
   
   // Style defaults
   strokeColor: '#8b5cf6', // purple brand
@@ -391,5 +399,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         future: newFuture
       }
     });
-  }
+  },
+
+  setEditorMode: (editorMode) => set({ editorMode }),
+  setDocumentContent: (documentContent) => set({ documentContent })
 }));

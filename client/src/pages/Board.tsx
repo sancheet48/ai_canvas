@@ -23,7 +23,11 @@ import {
   Moon,
   Home,
   Plus,
-  FolderOpen
+  FolderOpen,
+  FileText,
+  LayoutGrid,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 import { useCanvasStore, CanvasElement, ToolType } from '../store/useCanvasStore';
@@ -35,6 +39,7 @@ import { ShareModal } from '../components/ShareModal';
 import { SocialExportModal } from '../components/SocialExportModal';
 import { CreateBoardModal } from '../components/CreateBoardModal';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { DocumentEditor } from '../components/DocumentEditor';
 import { 
   screenToWorld, 
   worldToScreen, 
@@ -89,7 +94,11 @@ export const Board: React.FC = () => {
     totalPages,
     setTotalPages,
     addPage,
-    deletePage
+    deletePage,
+    editorMode,
+    setEditorMode,
+    documentContent,
+    setDocumentContent
   } = useCanvasStore();
 
   const visibleElements = canvasMode === 'pages'
@@ -118,6 +127,10 @@ export const Board: React.FC = () => {
   const [editingTextElementId, setEditingTextElementId] = useState<string | null>(null);
   const [editingTextVal, setEditingTextVal] = useState('');
   const [textInputPos, setTextInputPos] = useState({ x: 0, y: 0 });
+
+  // Document Card editing overlay
+  const [editingDocumentElementId, setEditingDocumentElementId] = useState<string | null>(null);
+  const [editingDocumentContent, setEditingDocumentContent] = useState<string>('');
   // Collaborative multiplayer cursors state
   const [collaborators, setCollaborators] = useState<{ [socketId: string]: any }>({});
 
@@ -316,6 +329,11 @@ export const Board: React.FC = () => {
       setElements(syncedElements, true); // skip recording in local history stack to prevent loops
     });
 
+    // Real-time document updates sync
+    socket.on('document-synced', (syncedContent: string) => {
+      setDocumentContent(syncedContent);
+    });
+
     // Periodically sync local state to others (on mount / after loads)
     socket.emit('canvas-sync', { boardId, elements });
 
@@ -328,6 +346,13 @@ export const Board: React.FC = () => {
   const broadcastCanvasState = (nextElements: CanvasElement[]) => {
     if (socketRef.current) {
       socketRef.current.emit('canvas-sync', { boardId, elements: nextElements });
+    }
+  };
+
+  // Sync document content changes to other collaborators
+  const broadcastDocumentContent = (nextContent: string) => {
+    if (socketRef.current) {
+      socketRef.current.emit('document-sync', { boardId, content: nextContent });
     }
   };
 
@@ -358,6 +383,11 @@ export const Board: React.FC = () => {
             setBoardVisibility(boardData.visibility);
             setBoardShareToken(boardData.share_token);
             setBoardTitle(boardData.title || 'Untitled Board');
+            if (boardData.document_content !== undefined) {
+              setDocumentContent(boardData.document_content);
+            } else {
+              setDocumentContent('');
+            }
             if (boardData.data) {
               setElements(boardData.data, true); // load board elements without pushing history
               
@@ -393,6 +423,8 @@ export const Board: React.FC = () => {
     } else {
       // Local storage fallback for guest board
       const saved = localStorage.getItem('local-fallback-board-data');
+      const savedDoc = localStorage.getItem('local-fallback-board-doc-content') || '';
+      setDocumentContent(savedDoc);
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
@@ -431,6 +463,7 @@ export const Board: React.FC = () => {
       // Local storage autosave for guest board
       const timer = setTimeout(() => {
         localStorage.setItem('local-fallback-board-data', JSON.stringify(elements));
+        localStorage.setItem('local-fallback-board-doc-content', documentContent);
         setSaveStatus('saved');
       }, 1000);
       return () => clearTimeout(timer);
@@ -449,7 +482,10 @@ export const Board: React.FC = () => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${accessToken}`
           },
-          body: JSON.stringify({ data: elements })
+          body: JSON.stringify({ 
+            data: elements,
+            document_content: documentContent
+          })
         });
         if (res.ok) {
           setSaveStatus('saved');
@@ -463,7 +499,7 @@ export const Board: React.FC = () => {
     }, 2000); // 2 seconds debounced autosave
 
     return () => clearTimeout(timer);
-  }, [elements, id, accessToken]);
+  }, [elements, documentContent, id, accessToken]);
 
   // Sync page configuration changes to localStorage
   useEffect(() => {
@@ -480,6 +516,7 @@ export const Board: React.FC = () => {
     
     if (!id) {
       localStorage.setItem('local-fallback-board-data', JSON.stringify(elements));
+      localStorage.setItem('local-fallback-board-doc-content', documentContent);
       setSaveStatus('saved');
       return;
     }
@@ -496,7 +533,10 @@ export const Board: React.FC = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`
         },
-        body: JSON.stringify({ data: elements })
+        body: JSON.stringify({ 
+          data: elements,
+          document_content: documentContent
+        })
       });
       if (res.ok) {
         setSaveStatus('saved');
@@ -894,7 +934,8 @@ export const Board: React.FC = () => {
             el.id === selectedIds[0] &&
             (el.type === 'rectangle' ||
              el.type === 'ellipse' ||
-             el.type === 'diamond')
+             el.type === 'diamond' ||
+             el.type === 'document')
           ) {
             return {
               ...el,
@@ -928,6 +969,25 @@ export const Board: React.FC = () => {
           text: 'Text here',
           pageIndex: tempDrawingElement.pageIndex
         }]);
+      } else if (tool === 'document') {
+        let normalizedElement = { ...tempDrawingElement };
+        const x = normalizedElement.x;
+        const y = normalizedElement.y;
+        const w = normalizedElement.width;
+        const h = normalizedElement.height;
+        normalizedElement.x = Math.min(x, x + w);
+        normalizedElement.y = Math.min(y, y + h);
+        normalizedElement.width = Math.abs(w) < 10 ? 350 : Math.abs(w);
+        normalizedElement.height = Math.abs(h) < 10 ? 220 : Math.abs(h);
+        normalizedElement.text = normalizedElement.text || '';
+
+        const finishedElements = [...elements, normalizedElement];
+        setElements(finishedElements);
+        broadcastCanvasState(finishedElements);
+
+        // Open Document Editor modal immediately on creation
+        setEditingDocumentElementId(normalizedElement.id);
+        setEditingDocumentContent(normalizedElement.text);
       } else {
         let normalizedElement = { ...tempDrawingElement };
         if (
@@ -957,6 +1017,121 @@ export const Board: React.FC = () => {
     setAction('none');
     setResizeHandleIndex(null);
     setDraggingStartOffsets([]);
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+
+    const worldPt = screenToWorld(screenX, screenY, pan, zoom);
+
+    // Find if double clicked over any document element
+    const hitElement = [...visibleElements].reverse().find(
+      el => el.type === 'document' && isPointOverElement(worldPt, el)
+    );
+    if (hitElement) {
+      setEditingDocumentElementId(hitElement.id);
+      setEditingDocumentContent(hitElement.text || '');
+    }
+  };
+
+  const handleSaveDocument = (content: string) => {
+    if (!editingDocumentElementId) return;
+
+    const nextElements = elements.map(el => {
+      if (el.id === editingDocumentElementId) {
+        return {
+          ...el,
+          text: content
+        };
+      }
+      return el;
+    });
+
+    setElements(nextElements);
+    broadcastCanvasState(nextElements);
+
+    // Reset all drag/draw state so the card doesn't keep moving with the cursor
+    setAction('none');
+    setDraggingStartOffsets([]);
+    setTempDrawingElement(null);
+
+    // Switch tool back to selection, but do NOT select the element
+    // (selecting it immediately causes the moving action to re-engage)
+    setTool('selection');
+    setSelectedIds([]);
+
+    setEditingDocumentElementId(null);
+    setEditingDocumentContent('');
+  };
+
+  const handleCardMouseDown = (e: React.MouseEvent, el: CanvasElement) => {
+    // If clicking a button inside the card, ignore
+    if ((e.target as Element).closest('button')) return;
+
+    e.stopPropagation();
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    const worldPt = screenToWorld(screenX, screenY, pan, zoom);
+
+    // ── Resize handle detection ──────────────────────────────────────────────
+    // The canvas draws resize handles at the top-left and bottom-right corners
+    // of the selected element. Since the DOM card overlay sits on top of the
+    // canvas, the canvas never receives the mousedown when the user clicks a
+    // corner. We replicate the hit-test here so the correct action is set.
+    if (selectedIds.length === 1 && selectedIds.includes(el.id)) {
+      const handles = [
+        { x: el.x,              y: el.y               }, // index 0: top-left
+        { x: el.x + el.width,   y: el.y + el.height   }, // index 1: bottom-right
+      ];
+      for (let i = 0; i < handles.length; i++) {
+        const dist = Math.hypot(worldPt.x - handles[i].x, worldPt.y - handles[i].y);
+        if (dist < 10 / zoom) {
+          // Hit a resize handle — start resize, not move
+          setAction('resizing');
+          setResizeHandleIndex(i);
+          setStartPoint(worldPt);
+          return;
+        }
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    if (e.metaKey || e.ctrlKey) {
+      if (selectedIds.includes(el.id)) {
+        setSelectedIds(selectedIds.filter(id => id !== el.id));
+      } else {
+        setSelectedIds([...selectedIds, el.id]);
+      }
+    } else if (!selectedIds.includes(el.id)) {
+      setSelectedIds([el.id]);
+    }
+
+    const currentSel = selectedIds.includes(el.id) ? selectedIds : [el.id];
+    const targetIds = e.metaKey || e.ctrlKey 
+      ? (selectedIds.includes(el.id) ? selectedIds : [...selectedIds, el.id])
+      : currentSel;
+
+    const offsets = visibleElements
+      .filter(item => targetIds.includes(item.id))
+      .map(item => ({
+        id: item.id,
+        dx: worldPt.x - item.x,
+        dy: worldPt.y - item.y
+      }));
+    
+    setDraggingStartOffsets(offsets);
+    setAction('moving');
+    setStartPoint(worldPt);
   };
 
   // 5. MOUSE WHEEL PAN & ZOOM HANDLERS
@@ -1058,7 +1233,15 @@ export const Board: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore shortcut hotkeys if user is editing text inputs
-      if (editingTextElementId) return;
+      if (
+        editingTextElementId ||
+        editingDocumentElementId ||
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA' ||
+        document.activeElement?.getAttribute('contenteditable') === 'true'
+      ) {
+        return;
+      }
 
       const step = e.shiftKey ? 10 : 2;
 
@@ -1087,6 +1270,22 @@ export const Board: React.FC = () => {
         useCanvasStore.getState().setSnapToGrid(!useCanvasStore.getState().snapToGrid);
       }
 
+      // Tool selection hotkeys
+      const key = e.key.toLowerCase();
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (key === '1' || key === 'v') setTool('selection');
+        else if (key === '2' || key === 'r') setTool('rectangle');
+        else if (key === '3' || key === 'o') setTool('ellipse');
+        else if (key === '4' || key === 'd') setTool('diamond');
+        else if (key === '5' || key === 'l') setTool('line');
+        else if (key === '6' || key === 'a') setTool('arrow');
+        else if (key === '7' || key === 'p') setTool('freehand');
+        else if (key === '8' || key === 't') setTool('text');
+        else if (key === '9' || key === 'i') setTool('image');
+        else if (key === 'w') setTool('document');
+        else if (key === '0' || key === 'e') setTool('eraser');
+      }
+
       // Arrows Nudges
       if (selectedIds.length > 0) {
         let dx = 0, dy = 0;
@@ -1111,7 +1310,7 @@ export const Board: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds, elements, editingTextElementId]);
+  }, [selectedIds, elements, editingTextElementId, editingDocumentElementId, setTool, currentPage]);
 
   // Image Upload helper click trigger
   useEffect(() => {
@@ -1184,6 +1383,38 @@ export const Board: React.FC = () => {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  // Get bounding box of all selected elements in world coordinates
+  const getSelectedElementsBounds = () => {
+    if (selectedIds.length === 0) return null;
+    const selectedEls = visibleElements.filter(el => selectedIds.includes(el.id));
+    if (selectedEls.length === 0) return null;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    selectedEls.forEach(el => {
+      const center = getElementCenter(el);
+      
+      const corners = [
+        rotatePoint(el.x, el.y, center.x, center.y, el.angle),
+        rotatePoint(el.x + el.width, el.y, center.x, center.y, el.angle),
+        rotatePoint(el.x, el.y + el.height, center.x, center.y, el.angle),
+        rotatePoint(el.x + el.width, el.y + el.height, center.x, center.y, el.angle)
+      ];
+
+      corners.forEach(c => {
+        if (c.x < minX) minX = c.x;
+        if (c.x > maxX) maxX = c.x;
+        if (c.y < minY) minY = c.y;
+        if (c.y > maxY) maxY = c.y;
+      });
+    });
+
+    return { minX, minY, maxX, maxY };
   };
 
   return (
@@ -1398,6 +1629,14 @@ export const Board: React.FC = () => {
           >
             {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />}
           </button>
+
+          <button
+            onClick={() => setShowShortcuts(true)}
+            className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 hover:text-white transition-colors"
+            title="Keyboard Shortcuts"
+          >
+            <Keyboard className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -1406,19 +1645,144 @@ export const Board: React.FC = () => {
       <StylePanel />
       <AiChatPanel />
 
+      {/* CANVAS VIEWPORT & DOM OVERLAYS */}
+      <div className="relative w-full h-full overflow-hidden">
+        <canvas
+          ref={canvasRef}
+          width={dimensions.width}
+          height={dimensions.height}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onWheel={handleWheel}
+          onDoubleClick={handleDoubleClick}
+          className="w-full h-full block cursor-crosshair"
+        />
 
+        {/* DOM Document Card Overlays */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">
+          {visibleElements
+            .filter((el) => el.type === 'document')
+            .map((el) => {
+              const isSelected = selectedIds.includes(el.id);
+              const isCollapsed = !!el.collapsed;
+              const plainText = isCollapsed 
+                ? (new DOMParser().parseFromString(el.text || '', 'text/html').body.textContent || '')
+                : '';
 
-      {/* CANVAS VIEWPORT */}
-      <canvas
-        ref={canvasRef}
-        width={dimensions.width}
-        height={dimensions.height}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onWheel={handleWheel}
-        className="w-full h-full block cursor-crosshair"
-      />
+              return (
+                <div
+                  key={el.id}
+                  onMouseDown={(e) => handleCardMouseDown(e, el)}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setEditingDocumentElementId(el.id);
+                    setEditingDocumentContent(el.text || '');
+                  }}
+                  className={`absolute bg-white dark:bg-dark-900 border text-slate-800 dark:text-slate-100 rounded-2xl shadow-xl overflow-hidden pointer-events-auto select-text transition-shadow ${
+                    isCollapsed ? 'p-2 flex items-center justify-between' : 'p-4 flex flex-col'
+                  } ${
+                    isSelected
+                      ? 'border-brand-500 ring-2 ring-brand-500/20 shadow-brand-500/10'
+                      : 'border-slate-200 dark:border-white/5'
+                  }`}
+                  style={{
+                    left: el.x * zoom + pan.x,
+                    top: el.y * zoom + pan.y,
+                    width: el.width * zoom,
+                    height: el.height * zoom,
+                    transform: `rotate(${el.angle}rad)`,
+                    transformOrigin: 'center center',
+                    opacity: el.opacity,
+                  }}
+                >
+                  {/* Collapse/Expand Toggle Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const nextElements = elements.map(item => {
+                        if (item.id === el.id) {
+                          const isCurrentlyCollapsed = !!item.collapsed;
+                          if (isCurrentlyCollapsed) {
+                            // Expand: restore original height
+                            return {
+                              ...item,
+                              collapsed: false,
+                              height: item.expandedHeight || 220
+                            };
+                          } else {
+                            // Collapse: backup current height and set height to 50
+                            return {
+                              ...item,
+                              collapsed: true,
+                              expandedHeight: item.height,
+                              height: 50
+                            };
+                          }
+                        }
+                        return item;
+                      });
+                      setElements(nextElements);
+                      broadcastCanvasState(nextElements);
+                    }}
+                    className="absolute top-2 right-2 p-1 rounded-lg bg-dark-900/60 dark:bg-dark-950/60 border border-white/5 text-dark-200 hover:text-white hover:bg-dark-800 pointer-events-auto z-10 select-none flex items-center justify-center transition-all w-6 h-6 hover-scale shadow"
+                    title={isCollapsed ? "Expand Document" : "Collapse Document"}
+                  >
+                    {el.collapsed ? (
+                      <Maximize2 className="w-3.5 h-3.5 text-brand-500" />
+                    ) : (
+                      <Minimize2 className="w-3.5 h-3.5 text-brand-500" />
+                    )}
+                  </button>
+
+                  {/* HTML Content Preview */}
+                  {isCollapsed ? (
+                    <div
+                      className="w-full h-full text-left text-xs font-semibold text-slate-700 dark:text-slate-200 pr-6 overflow-hidden whitespace-nowrap text-ellipsis flex items-center"
+                      style={{
+                        fontSize: `${Math.max(8, 12 * zoom)}px`,
+                      }}
+                    >
+                      {plainText.trim() ? plainText : <span className="italic text-dark-400">Empty Document</span>}
+                    </div>
+                  ) : (
+                    <div
+                      className="flex-1 w-full overflow-y-auto text-left text-xs prose prose-sm dark:prose-invert leading-relaxed max-w-none text-slate-700 dark:text-slate-200 pr-6"
+                      style={{
+                        fontSize: `${Math.max(6, 12 * zoom)}px`,
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word',
+                        overflowX: 'hidden'
+                      }}
+                      dangerouslySetInnerHTML={{ __html: el.text || '' }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+        </div>
+
+        {/* ── Drag capture overlay ──────────────────────────────────────────
+            When a drag action is in progress (move / resize / rotate), this
+            transparent full-screen div sits above the document card DOM
+            overlays so that mousemove / mouseup events always reach the
+            handler even when the cursor stays over a card during the drag.
+        ────────────────────────────────────────────────────────────────── */}
+        {(action === 'moving' || action === 'resizing' || action === 'rotating') && !editingDocumentElementId && (
+          <div
+            className="absolute inset-0"
+            style={{
+              zIndex: 20,
+              cursor:
+                action === 'resizing' ? 'nwse-resize'
+                : action === 'moving'  ? 'grabbing'
+                : 'default',
+            }}
+            onMouseMove={(e) => handleMouseMove(e as unknown as React.MouseEvent<HTMLCanvasElement>)}
+            onMouseUp={(e) => handleMouseUp(e as unknown as React.MouseEvent<HTMLCanvasElement>)}
+          />
+        )}
+      </div>
 
       {/* TEXT AREA INPUT FIELD (OVERLAY ON TEXT SELECTION) */}
       {editingTextElementId && (
@@ -1481,14 +1845,7 @@ export const Board: React.FC = () => {
         />
       )}
 
-      {/* KEYBOARD SHORTCUTS FLOATING TOGGLE BUTTON */}
-      <button
-        onClick={() => setShowShortcuts(true)}
-        className="fixed bottom-6 left-6 p-3 rounded-full bg-dark-900 border border-white/5 text-dark-200 hover:text-white hover-scale shadow-2xl z-30 flex items-center justify-center w-11 h-11"
-        title="Keyboard Shortcuts"
-      >
-        <Keyboard className="w-5 h-5" />
-      </button>
+
 
       {/* KEYBOARD SHORTCUTS MODAL DIALOG */}
       {showShortcuts && (
@@ -1607,6 +1964,59 @@ export const Board: React.FC = () => {
         }}
         onCancel={() => setIsDeletePageModalOpen(false)}
       />
+
+      {/* FLOATING ACTION TOOLBAR FOR SELECTED ELEMENTS */}
+      {selectedIds.length > 0 && !editingTextElementId && !editingDocumentElementId && (() => {
+        const bounds = getSelectedElementsBounds();
+        if (!bounds) return null;
+        
+        const topLeft = worldToScreen(bounds.minX, bounds.minY, pan, zoom);
+        const bottomRight = worldToScreen(bounds.maxX, bounds.maxY, pan, zoom);
+        
+        // Position it at the top right of the selection box, slightly shifted and clamped to the viewport
+        const left = Math.max(16, Math.min(window.innerWidth - 48, bottomRight.x + 8));
+        const top = Math.max(80, Math.min(window.innerHeight - 48, topLeft.y - 36));
+
+        return (
+          <button
+            onClick={() => {
+              deleteSelected();
+              broadcastCanvasState(elements.filter(el => !selectedIds.includes(el.id)));
+            }}
+            className="absolute p-2 rounded-xl bg-dark-900 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-2xl z-30 flex items-center justify-center w-8 h-8 hover-scale pointer-events-auto"
+            style={{
+              left: `${left}px`,
+              top: `${top}px`,
+            }}
+            title="Delete Selected Items"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        );
+      })()}
+
+      {/* DOCUMENT EDITOR MODAL OVERLAY */}
+      {editingDocumentElementId !== null && (
+        <DocumentEditor
+          initialValue={editingDocumentContent}
+          onSave={handleSaveDocument}
+          onCancel={() => {
+            const targetEl = elements.find(el => el.id === editingDocumentElementId);
+            if (targetEl && (targetEl.text === '' || !targetEl.text || targetEl.text.trim() === '' || targetEl.text === '<p><br></p>')) {
+              const nextElements = elements.filter(el => el.id !== editingDocumentElementId);
+              setElements(nextElements);
+              broadcastCanvasState(nextElements);
+            }
+            // Reset all drag/draw state so nothing drifts after cancel
+            setAction('none');
+            setDraggingStartOffsets([]);
+            setTempDrawingElement(null);
+            setSelectedIds([]);
+            setEditingDocumentElementId(null);
+            setEditingDocumentContent('');
+          }}
+        />
+      )}
     </div>
   );
 };

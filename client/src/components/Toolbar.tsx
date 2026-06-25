@@ -13,6 +13,7 @@ import {
   Pencil, 
   Type, 
   Image as ImageIcon, 
+  FileText,
   Eraser, 
   ZoomIn, 
   ZoomOut, 
@@ -56,6 +57,7 @@ interface ToolbarProps {
     { type: 'freehand', label: 'Pencil (P or 7)', icon: <Pencil className="w-5 h-5" />, hotkey: '7' },
     { type: 'text', label: 'Text (T or 8)', icon: <Type className="w-5 h-5" />, hotkey: '8' },
     { type: 'image', label: 'Image Upload (I or 9)', icon: <ImageIcon className="w-5 h-5" />, hotkey: '9' },
+    { type: 'document', label: 'Document Card (W)', icon: <FileText className="w-5 h-5" />, hotkey: 'w' },
     { type: 'eraser', label: 'Eraser (E or 0)', icon: <Eraser className="w-5 h-5" />, hotkey: '0' },
   ];
 

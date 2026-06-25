@@ -162,6 +162,11 @@ export async function runMigrations() {
       ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '' NOT NULL
     `);
 
+    await client.query(`
+      ALTER TABLE boards 
+      ADD COLUMN IF NOT EXISTS document_content TEXT DEFAULT '' NOT NULL
+    `);
+
     await client.query('COMMIT');
     console.log('Database migrations completed successfully.');
   } catch (err) {

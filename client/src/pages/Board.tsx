@@ -22,7 +22,8 @@ import {
   Sun,
   Moon,
   Home,
-  Plus
+  Plus,
+  FolderOpen
 } from 'lucide-react';
 
 import { useCanvasStore, CanvasElement, ToolType } from '../store/useCanvasStore';
@@ -33,6 +34,7 @@ import { AiChatPanel } from '../components/AiChatPanel';
 import { ShareModal } from '../components/ShareModal';
 import { SocialExportModal } from '../components/SocialExportModal';
 import { CreateBoardModal } from '../components/CreateBoardModal';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { 
   screenToWorld, 
   worldToScreen, 
@@ -116,7 +118,6 @@ export const Board: React.FC = () => {
   const [editingTextElementId, setEditingTextElementId] = useState<string | null>(null);
   const [editingTextVal, setEditingTextVal] = useState('');
   const [textInputPos, setTextInputPos] = useState({ x: 0, y: 0 });
-
   // Collaborative multiplayer cursors state
   const [collaborators, setCollaborators] = useState<{ [socketId: string]: any }>({});
 
@@ -124,14 +125,14 @@ export const Board: React.FC = () => {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [isDeletePageModalOpen, setIsDeletePageModalOpen] = useState(false);
   const [boardVisibility, setBoardVisibility] = useState<'private' | 'public' | 'link-only'>('private');
   const [boardShareToken, setBoardShareToken] = useState('');
-
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'idle'>('idle');
+
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
   });
-
   const isLoadedRef = useRef(false);
 
   const boardId = id || 'local-fallback-board';
@@ -140,6 +141,8 @@ export const Board: React.FC = () => {
   const [openTabs, setOpenTabs] = useState<{ id: string; title: string }[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [allBoards, setAllBoards] = useState<{ id: string; title: string }[]>([]);
+  const [showOpenDropdown, setShowOpenDropdown] = useState(false);
 
   // Sync open workspace tabs list
   useEffect(() => {
@@ -164,6 +167,36 @@ export const Board: React.FC = () => {
     localStorage.setItem(storageKey, JSON.stringify(list));
     setOpenTabs(list);
   }, [id, boardTitle, user?.email]);
+
+  // Load list of all workspaces for tab switcher
+  useEffect(() => {
+    if (!accessToken) return;
+    const fetchAllBoards = async () => {
+      try {
+        const res = await fetch('/api/boards', {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setAllBoards(data);
+        }
+      } catch (err) {
+        console.error('Failed to load workspaces list:', err);
+      }
+    };
+    fetchAllBoards();
+  }, [accessToken, id]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (showOpenDropdown && !(e.target as Element).closest('.open-workspace-container')) {
+        setShowOpenDropdown(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showOpenDropdown]);
 
   const handleSelectTab = (tabId: string) => {
     navigate(`/board/${tabId}`);
@@ -1202,8 +1235,49 @@ export const Board: React.FC = () => {
             })}
           </div>
 
-          {/* Right: + Create Tab Button */}
-          <div className="flex items-center gap-2">
+          {/* Right: Open Workspace Selector Dropdown & + Create Tab Button */}
+          <div className="flex items-center gap-2 relative open-workspace-container">
+            <div className="relative">
+              <button
+                onClick={() => setShowOpenDropdown(!showOpenDropdown)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-950/60 border border-white/5 hover:border-brand-500/30 text-[10px] font-bold text-dark-200 hover:text-white transition-all"
+                title="Open an existing whiteboard in a new tab"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-brand-500" /> Open Workspace
+              </button>
+              
+              {showOpenDropdown && (
+                <div 
+                  className="absolute right-0 mt-2 bg-dark-900 border border-white/5 rounded-2xl p-2.5 z-50 shadow-2xl w-56 max-h-60 overflow-y-auto text-[10px]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <p className="font-bold text-white uppercase tracking-wider px-2 pb-2 border-b border-dark-800 mb-1.5">Open Workspace</p>
+                  {allBoards.length === 0 ? (
+                    <p className="text-dark-300 text-center py-2 italic">No other whiteboards</p>
+                  ) : (
+                    allBoards.map((b) => {
+                      const isAlreadyOpen = openTabs.some(t => t.id === b.id);
+                      return (
+                        <button
+                          key={b.id}
+                          onClick={() => {
+                            navigate(`/board/${b.id}`);
+                            setShowOpenDropdown(false);
+                          }}
+                          disabled={isAlreadyOpen}
+                          className="w-full text-left px-2 py-2 rounded-xl transition-all flex items-center gap-2 hover:bg-dark-950/40 text-dark-200 hover:text-white font-semibold disabled:opacity-45 disabled:pointer-events-none"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-brand-500 flex-shrink-0" />
+                          <span className="truncate flex-1">{b.title}</span>
+                          {isAlreadyOpen && <span className="text-[8px] text-brand-500 font-bold uppercase">Open</span>}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => setIsCreateModalOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-[10px] font-bold text-white shadow-lg shadow-brand-600/15 hover-scale transition-all"
@@ -1211,53 +1285,68 @@ export const Board: React.FC = () => {
             >
               <Plus className="w-3.5 h-3.5" /> New Tab
             </button>
+
+            <div className="w-[1px] h-4 bg-dark-800 mx-1.5" />
+
+            {/* Exit Workspace (Explore) Button */}
+            <button 
+              onClick={() => navigate('/explore')}
+              className="p-1.5 rounded-xl text-dark-200 hover:bg-dark-800 hover:text-white transition-colors flex items-center justify-center"
+              title="Exit Workspace (Explore)"
+            >
+              <ChevronLeft className="w-4 h-4 text-brand-500" />
+            </button>
+            
+            <div className="w-[1px] h-4 bg-dark-800" />
+
+            {/* User ID profile pill */}
+            <div className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-lg bg-dark-950/40 text-[10px] text-dark-200 select-none">
+              <User className="w-3.5 h-3.5 text-brand-500" />
+              <span className="font-medium max-w-28 truncate">{user?.email.split('@')[0]}</span>
+              {user?.plan && user.plan !== 'free' && (
+                <span className="ml-1 px-1.5 py-0.2 rounded bg-amber-500/10 border border-amber-500/20 text-[8px] font-bold text-amber-500 uppercase tracking-wider">
+                  {user.plan}
+                </span>
+              )}
+            </div>
+
+            <div className="w-[1px] h-4 bg-dark-800" />
+
+            {/* Log Out Exit Button */}
+            <button
+              onClick={() => logout().then(() => navigate('/login'))}
+              className="p-1.5 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors flex items-center justify-center"
+              title="Log out"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       )}
 
-      {/* Top toolbar banner */}
-      <div className={`absolute left-6 right-6 flex items-center justify-between z-30 pointer-events-none ${
-        user?.email && openTabs.length > 0 ? 'top-20' : 'top-6'
-      }`}>
-        
-        {/* Navigation / Workspace info */}
-        <div className="flex items-center gap-3 p-1.5 rounded-2xl glass-panel shadow-2xl pointer-events-auto">
-          <button 
+      {/* Fallback Exit Button for Guest users or empty-tab layouts */}
+      {(!user?.email || openTabs.length === 0) && (
+        <div className="absolute top-4 right-6 z-30 pointer-events-auto">
+          <button
             onClick={() => navigate('/explore')}
-            className="flex items-center justify-center p-2 rounded-xl text-dark-200 hover:bg-dark-800 hover:text-white transition-colors"
-            title="Explore boards"
+            className="flex items-center justify-center p-2.5 rounded-2xl bg-dark-900/60 backdrop-blur-md border border-white/5 text-dark-200 hover:bg-dark-800 hover:text-white transition-colors shadow-2xl"
+            title="Exit Workspace"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="w-5 h-5 text-brand-500" />
           </button>
-          <div className="px-2">
-            <h1 className="text-xs font-bold text-white tracking-wide truncate max-w-[200px]" title={boardTitle}>
-              {boardTitle}
-            </h1>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-[9px] text-dark-200 uppercase font-mono">{boardVisibility} room</span>
-              <span className="text-[9px] text-dark-300">•</span>
-              <span className={`text-[9px] font-medium transition-all ${
-                saveStatus === 'saved' ? 'text-green-500' :
-                saveStatus === 'saving' ? 'text-brand-500 animate-pulse' :
-                saveStatus === 'error' ? 'text-red-500' : 'text-dark-300'
-              }`}>
-                {saveStatus === 'saved' ? 'Autosaved' :
-                 saveStatus === 'saving' ? 'Saving...' :
-                 saveStatus === 'error' ? 'Save failed' : 'All saved'}
-              </span>
-            </div>
-          </div>
         </div>
+      )}
 
-        {/* Action controllers */}
-        <div className="flex items-center gap-2 p-1.5 rounded-2xl glass-panel shadow-2xl pointer-events-auto">
+      {/* Floating Bottom Left File/Action Controls */}
+      <div className="absolute bottom-6 left-6 flex items-center gap-2 z-30 pointer-events-none">
+        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl glass-panel shadow-2xl pointer-events-auto">
           {user?.role === 'admin' && (
             <button
               onClick={() => navigate('/admin')}
               className="p-2 rounded-xl text-brand-500 hover:bg-dark-800 transition-colors"
               title="Admin Dashboard"
             >
-              <Settings className="w-5 h-5" />
+              <Settings className="w-4 h-4" />
             </button>
           )}
 
@@ -1284,19 +1373,19 @@ export const Board: React.FC = () => {
             <Save className="w-4 h-4" />
           </button>
 
-          <div className="w-[1px] h-5 bg-dark-800 mx-1" />
+          <div className="w-[1px] h-4 bg-dark-800 mx-1" />
 
           <button
             onClick={() => setShowShareModal(true)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-dark-900 border border-white/5 text-xs font-bold text-dark-200 hover:text-white transition-colors"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-dark-900 border border-white/5 text-[10px] font-bold text-dark-200 hover:text-white transition-colors"
             title="Manage sharing visibilities"
           >
-            <Share className="w-3.5 h-3.5" /> Share
+            <Share className="w-3.5 h-3.5 text-brand-500" /> Share
           </button>
 
           <button
             onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-xs font-bold text-white shadow-lg shadow-brand-600/15 transition-all"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-[10px] font-bold text-white shadow-lg shadow-brand-600/15 transition-all"
             title="Export files & publish social posts"
           >
             <Sparkles className="w-3.5 h-3.5" /> Export
@@ -1309,32 +1398,11 @@ export const Board: React.FC = () => {
           >
             {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />}
           </button>
-
-          <div className="w-[1px] h-5 bg-dark-800 mx-1" />
-
-          <div className="flex items-center gap-2 pl-1.5 pr-2.5 py-0.5 rounded-lg bg-dark-950/40 text-[10px] text-dark-200">
-            <User className="w-3.5 h-3.5 text-brand-500" />
-            <span className="font-medium max-w-28 truncate">{user?.email.split('@')[0]}</span>
-            {user?.plan && user.plan !== 'free' && (
-              <span className="ml-1 px-1.5 py-0.2 rounded bg-amber-500/10 border border-amber-500/20 text-[8px] font-bold text-amber-500 uppercase tracking-wider">
-                {user.plan}
-              </span>
-            )}
-          </div>
-
-          <button
-            onClick={() => logout().then(() => navigate('/login'))}
-            className="p-2 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
-            title="Log out"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
         </div>
-
       </div>
 
       {/* FLOATING TOOLS & CONTROLS */}
-      <Toolbar />
+      <Toolbar onDeletePageTrigger={() => setIsDeletePageModalOpen(true)} />
       <StylePanel />
       <AiChatPanel />
 
@@ -1522,6 +1590,22 @@ export const Board: React.FC = () => {
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateTabBoard}
         creating={creating}
+        allBoards={allBoards}
+        onOpenBoard={(boardId) => navigate(`/board/${boardId}`)}
+        openTabs={openTabs}
+      />
+
+      <ConfirmModal
+        isOpen={isDeletePageModalOpen}
+        title="Delete Page"
+        message={`Are you sure you want to delete Page ${currentPage}? All shapes on this page will be permanently deleted.`}
+        confirmLabel="Delete"
+        isDanger={true}
+        onConfirm={() => {
+          deletePage(currentPage);
+          setIsDeletePageModalOpen(false);
+        }}
+        onCancel={() => setIsDeletePageModalOpen(false)}
       />
     </div>
   );

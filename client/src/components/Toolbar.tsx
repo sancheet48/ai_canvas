@@ -25,8 +25,9 @@ import {
 } from 'lucide-react';
 import { useCanvasStore, ToolType } from '../store/useCanvasStore';
 
-export const Toolbar: React.FC = () => {
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+interface ToolbarProps {
+  onDeletePageTrigger?: () => void;
+}export const Toolbar: React.FC<ToolbarProps> = ({ onDeletePageTrigger }) => {
   const { 
     tool, 
     setTool, 
@@ -45,7 +46,6 @@ export const Toolbar: React.FC = () => {
     addPage,
     deletePage
   } = useCanvasStore();
-
   const tools: { type: ToolType; label: string; icon: React.ReactNode; hotkey: string }[] = [
     { type: 'selection', label: 'Selection (V or 1)', icon: <MousePointer className="w-5 h-5" />, hotkey: '1' },
     { type: 'rectangle', label: 'Rectangle (R or 2)', icon: <Square className="w-5 h-5" />, hotkey: '2' },
@@ -215,7 +215,7 @@ export const Toolbar: React.FC = () => {
 
           {totalPages > 1 && (
             <button
-              onClick={() => setIsDeleteModalOpen(true)}
+              onClick={onDeletePageTrigger}
               className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
               title="Delete Page"
             >
@@ -224,19 +224,12 @@ export const Toolbar: React.FC = () => {
           )}
         </div>
       </div>
-
-      <ConfirmModal
-        isOpen={isDeleteModalOpen}
-        title="Delete Page"
-        message={`Are you sure you want to delete Page ${currentPage}? All shapes on this page will be permanently deleted.`}
-        confirmLabel="Delete"
-        isDanger={true}
-        onConfirm={() => {
-          deletePage(currentPage);
-          setIsDeleteModalOpen(false);
-        }}
-        onCancel={() => setIsDeleteModalOpen(false)}
-      />
     </div>
   );
 };
+
+
+
+
+
+

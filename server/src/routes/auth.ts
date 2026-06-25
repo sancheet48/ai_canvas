@@ -15,10 +15,10 @@ function hashToken(token: string): string {
 }
 
 // Token generation helpers
-function generateAccessToken(user: { id: number; email: string; role: string }): string {
+function generateAccessToken(user: { id: number; email: string; role: string; plan?: string }): string {
   const algorithm = getJwtAlgorithm();
   return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    { id: user.id, email: user.email, role: user.role, plan: user.plan || 'free' },
     privateKey,
     { algorithm, expiresIn: '15m' }
   );
@@ -122,7 +122,8 @@ router.post('/register', async (req, res) => {
           id: user.id,
           email: user.email,
           role: user.role,
-          verified: user.verified
+          verified: user.verified,
+          plan: 'free'
         }
       });
 
@@ -147,7 +148,10 @@ router.post('/login', async (req, res) => {
 
   try {
     const userRes = await db.query(
-      'SELECT id, email, password_hash, role, verified, suspended FROM users WHERE email = $1',
+      `SELECT u.id, u.email, u.password_hash, u.role, u.verified, u.suspended, COALESCE(s.plan, 'free') as plan
+       FROM users u
+       LEFT JOIN subscriptions s ON u.id = s.user_id
+       WHERE u.email = $1`,
       [email]
     );
 
@@ -171,7 +175,7 @@ router.post('/login', async (req, res) => {
     // Generate credentials
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
-
+    
     // Save session
     const rfHash = hashToken(refreshToken);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -196,7 +200,8 @@ router.post('/login', async (req, res) => {
         id: user.id,
         email: user.email,
         role: user.role,
-        verified: user.verified
+        verified: user.verified,
+        plan: user.plan
       }
     });
 
@@ -239,9 +244,10 @@ router.post('/refresh', async (req, res) => {
     // Look up in database
     const rfHash = hashToken(refreshToken);
     const sessionRes = await db.query(
-      `SELECT s.id, u.id as user_id, u.email, u.role, u.verified 
+      `SELECT s.id, u.id as user_id, u.email, u.role, u.verified, COALESCE(sub.plan, 'free') as plan
        FROM sessions s
        JOIN users u ON s.user_id = u.id
+       LEFT JOIN subscriptions sub ON u.id = sub.user_id
        WHERE s.refresh_token_hash = $1 AND s.expires_at > CURRENT_TIMESTAMP`,
       [rfHash]
     );
@@ -254,7 +260,8 @@ router.post('/refresh', async (req, res) => {
     const newAccessToken = generateAccessToken({
       id: user.user_id,
       email: user.email,
-      role: user.role
+      role: user.role,
+      plan: user.plan
     });
 
     return res.status(200).json({ accessToken: newAccessToken });

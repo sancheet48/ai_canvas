@@ -156,6 +156,12 @@ export async function runMigrations() {
       )
     `);
 
+    // Alter tables for schema updates
+    await client.query(`
+      ALTER TABLE boards 
+      ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '' NOT NULL
+    `);
+
     await client.query('COMMIT');
     console.log('Database migrations completed successfully.');
   } catch (err) {

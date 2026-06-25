@@ -10,17 +10,18 @@ interface MaybeAuthRequest extends AuthRequest {}
 
 // 1. CREATE BOARD
 router.post('/', verifyJWT, async (req: AuthRequest, res) => {
-  const { title, data, visibility, allowComments, allowFork } = req.body;
+  const { title, description, data, visibility, allowComments, allowFork } = req.body;
   const ownerId = req.user!.id;
 
   try {
     const boardRes = await db.query(
-      `INSERT INTO boards (owner_id, title, data, visibility, allow_comments, allow_fork)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO boards (owner_id, title, description, data, visibility, allow_comments, allow_fork)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
         ownerId,
         title || 'Untitled Board',
+        description || '',
         JSON.stringify(data || []),
         visibility || 'private',
         allowComments !== false,
@@ -72,7 +73,7 @@ router.get('/public', async (req, res) => {
 
   try {
     const boardsRes = await db.query(
-      `SELECT b.id, b.title, b.thumbnail_url, b.view_count, b.fork_count, b.created_at, b.updated_at, u.email as owner_email
+      `SELECT b.id, b.title, b.description, b.thumbnail_url, b.view_count, b.fork_count, b.created_at, b.updated_at, u.email as owner_email
        FROM boards b
        JOIN users u ON b.owner_id = u.id
        WHERE b.visibility = 'public'
@@ -188,7 +189,7 @@ router.get('/:id', async (req: MaybeAuthRequest, res) => {
 // 6. UPDATE BOARD (Title, Data, etc.)
 router.patch('/:id', verifyJWT, async (req: AuthRequest, res) => {
   const { id } = req.params;
-  const { title, data, thumbnail_url, allowComments, allowFork } = req.body;
+  const { title, description, data, thumbnail_url, allowComments, allowFork } = req.body;
   const userId = req.user!.id;
 
   try {
@@ -220,6 +221,10 @@ router.patch('/:id', verifyJWT, async (req: AuthRequest, res) => {
     if (title !== undefined) {
       updates.push(`title = $${paramIndex++}`);
       values.push(title);
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${paramIndex++}`);
+      values.push(description);
     }
     if (data !== undefined) {
       updates.push(`data = $${paramIndex++}`);

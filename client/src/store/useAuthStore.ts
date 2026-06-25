@@ -5,6 +5,7 @@ export interface User {
   email: string;
   role: 'user' | 'admin';
   verified: boolean;
+  plan: 'free' | 'pro' | 'team';
 }
 
 interface AuthState {
@@ -64,7 +65,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         id: decoded.id,
         email: decoded.email,
         role: decoded.role,
-        verified: decoded.verified || false
+        verified: decoded.verified || false,
+        plan: decoded.plan || 'free'
       };
 
       set({ user, accessToken: data.accessToken, loading: false });
@@ -94,7 +96,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         id: decoded.id,
         email: decoded.email,
         role: decoded.role,
-        verified: decoded.verified || false
+        verified: decoded.verified || false,
+        plan: decoded.plan || 'free'
       };
 
       set({ user, accessToken: data.accessToken, loading: false });
@@ -131,7 +134,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         id: decoded.id,
         email: decoded.email,
         role: decoded.role,
-        verified: decoded.verified || false
+        verified: decoded.verified || false,
+        plan: decoded.plan || 'free'
       };
 
       set({ user, accessToken: data.accessToken, loading: false });

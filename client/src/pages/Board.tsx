@@ -20,7 +20,9 @@ import {
   X,
   Save,
   Sun,
-  Moon
+  Moon,
+  Home,
+  Plus
 } from 'lucide-react';
 
 import { useCanvasStore, CanvasElement, ToolType } from '../store/useCanvasStore';
@@ -30,6 +32,7 @@ import { StylePanel } from '../components/StylePanel';
 import { AiChatPanel } from '../components/AiChatPanel';
 import { ShareModal } from '../components/ShareModal';
 import { SocialExportModal } from '../components/SocialExportModal';
+import { CreateBoardModal } from '../components/CreateBoardModal';
 import { 
   screenToWorld, 
   worldToScreen, 
@@ -118,6 +121,98 @@ export const Board: React.FC = () => {
   const isLoadedRef = useRef(false);
 
   const boardId = id || 'local-fallback-board';
+
+  const [boardTitle, setBoardTitle] = useState('Untitled Board');
+  const [openTabs, setOpenTabs] = useState<{ id: string; title: string }[]>([]);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  // Sync open workspace tabs list
+  useEffect(() => {
+    if (!id || !user?.email) return;
+
+    const storageKey = `whiteboard_open_tabs_${user.email}`;
+    let list: { id: string; title: string }[] = [];
+    try {
+      list = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    } catch (e) {
+      console.error(e);
+    }
+
+    // Update or append active board
+    const existingIndex = list.findIndex(t => t.id === id);
+    if (existingIndex === -1) {
+      list.push({ id, title: boardTitle });
+    } else if (list[existingIndex].title !== boardTitle && boardTitle !== 'Untitled Board') {
+      list[existingIndex].title = boardTitle;
+    }
+
+    localStorage.setItem(storageKey, JSON.stringify(list));
+    setOpenTabs(list);
+  }, [id, boardTitle, user?.email]);
+
+  const handleSelectTab = (tabId: string) => {
+    navigate(`/board/${tabId}`);
+  };
+
+  const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
+    e.stopPropagation();
+    if (!user?.email) return;
+
+    const storageKey = `whiteboard_open_tabs_${user.email}`;
+    const updated = openTabs.filter(t => t.id !== tabId);
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+    setOpenTabs(updated);
+
+    if (tabId === id) {
+      if (updated.length > 0) {
+        navigate(`/board/${updated[0].id}`);
+      } else {
+        navigate('/explore');
+      }
+    }
+  };
+
+  const handleCreateTabBoard = async (title: string, description: string, visibility: 'private' | 'public') => {
+    if (creating) return;
+    setCreating(true);
+
+    try {
+      const res = await fetch('/api/boards', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          title,
+          description,
+          data: [],
+          visibility
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.id) {
+        if (user?.email) {
+          const storageKey = `whiteboard_open_tabs_${user.email}`;
+          const list = [...openTabs];
+          if (!list.some(t => t.id === data.id)) {
+            list.push({ id: data.id, title: data.title || 'Untitled Board' });
+            localStorage.setItem(storageKey, JSON.stringify(list));
+            setOpenTabs(list);
+          }
+        }
+        navigate(`/board/${data.id}`);
+      } else {
+        throw new Error(data.error || 'Failed to create whiteboard');
+      }
+    } catch (err: any) {
+      console.error(err);
+      throw err;
+    } finally {
+      setCreating(false);
+    }
+  };
 
   // 1. WINDOW RESIZE EVENTS
   useEffect(() => {
@@ -215,8 +310,15 @@ export const Board: React.FC = () => {
           if (res.ok) {
             setBoardVisibility(boardData.visibility);
             setBoardShareToken(boardData.share_token);
+            setBoardTitle(boardData.title || 'Untitled Board');
             if (boardData.data) {
               setElements(boardData.data, true); // load board elements without pushing history
+            }
+            if (user?.email && id) {
+              const key = `whiteboard_recent_${user.email}`;
+              const recent = JSON.parse(localStorage.getItem(key) || '[]');
+              const updated = [id, ...recent.filter((item: string) => item !== id)].slice(0, 4);
+              localStorage.setItem(key, JSON.stringify(updated));
             }
           }
         } catch (err) {
@@ -241,6 +343,7 @@ export const Board: React.FC = () => {
       } else {
         setElements([], true);
       }
+      setBoardTitle('Local Workspace');
       isLoadedRef.current = true;
       setSaveStatus('idle');
     }
@@ -336,6 +439,30 @@ export const Board: React.FC = () => {
     localStorage.setItem('theme', nextTheme);
     setTheme(nextTheme);
   };
+
+  // Record board visit to recently-opened list
+  useEffect(() => {
+    if (!id || !user?.email) return;
+    
+    try {
+      const storageKey = `whiteboard_recent_${user.email}`;
+      const savedRecent = localStorage.getItem(storageKey);
+      let list: string[] = savedRecent ? JSON.parse(savedRecent) : [];
+      
+      // Filter out this id if it already exists, to move it to the front
+      list = list.filter(item => item !== id);
+      
+      // Prepend this id
+      list.unshift(id);
+      
+      // Keep maximum of 4 elements
+      list = list.slice(0, 4);
+      
+      localStorage.setItem(storageKey, JSON.stringify(list));
+    } catch (e) {
+      console.error('Failed to save recently opened board:', e);
+    }
+  }, [id, user?.email]);
 
   // 3. CANVAS REDRAW CYCLE
   useEffect(() => {
@@ -986,8 +1113,67 @@ export const Board: React.FC = () => {
   return (
     <div className="relative w-screen h-screen bg-dark-950 overflow-hidden">
       
+      {/* Workspace Tabs Bar */}
+      {user?.email && openTabs.length > 0 && (
+        <div className="absolute top-4 left-6 right-6 flex items-center justify-between z-30 pointer-events-auto h-12 bg-dark-900/60 backdrop-blur-md border border-white/5 rounded-2xl px-4 shadow-2xl select-none">
+          {/* Left: Explore Catalog Link & Title */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/explore')}
+              className="flex items-center justify-center p-2 rounded-xl text-dark-200 hover:bg-dark-800 hover:text-white transition-colors"
+              title="Return to Explore Dashboard"
+            >
+              <Home className="w-4 h-4 text-brand-500" />
+            </button>
+            <div className="w-[1px] h-4 bg-dark-800" />
+            <span className="text-[10px] font-bold text-dark-200 uppercase tracking-wider hidden sm:inline">Active Rooms:</span>
+          </div>
+
+          {/* Middle: Horizontal scrollable tab list */}
+          <div className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar px-4 max-w-full">
+            {openTabs.map((t) => {
+              const isActive = t.id === id;
+              return (
+                <div
+                  key={t.id}
+                  onClick={() => handleSelectTab(t.id)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl cursor-pointer transition-all border text-xs font-semibold select-none flex-shrink-0 group ${
+                    isActive
+                      ? 'bg-brand-600/10 border-brand-500 text-white shadow-lg shadow-brand-600/5'
+                      : 'bg-dark-950/40 border-white/5 text-dark-200 hover:text-white hover:border-white/10'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse flex-shrink-0" />
+                  <span className="truncate max-w-[120px]">{isActive ? boardTitle : t.title}</span>
+                  <button
+                    onClick={(e) => handleCloseTab(e, t.id)}
+                    className="p-0.5 rounded hover:bg-dark-800 text-dark-200 hover:text-red-500 transition-colors flex items-center justify-center flex-shrink-0"
+                    title="Close tab"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Right: + Create Tab Button */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-[10px] font-bold text-white shadow-lg shadow-brand-600/15 hover-scale transition-all"
+              title="Open a new whiteboard tab"
+            >
+              <Plus className="w-3.5 h-3.5" /> New Tab
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top toolbar banner */}
-      <div className="absolute top-6 left-6 right-6 flex items-center justify-between z-30 pointer-events-none">
+      <div className={`absolute left-6 right-6 flex items-center justify-between z-30 pointer-events-none ${
+        user?.email && openTabs.length > 0 ? 'top-20' : 'top-6'
+      }`}>
         
         {/* Navigation / Workspace info */}
         <div className="flex items-center gap-3 p-1.5 rounded-2xl glass-panel shadow-2xl pointer-events-auto">
@@ -999,7 +1185,9 @@ export const Board: React.FC = () => {
             <ChevronLeft className="w-5 h-5" />
           </button>
           <div className="px-2">
-            <h1 className="text-xs font-bold text-white tracking-wide">AI Whiteboard Canvas</h1>
+            <h1 className="text-xs font-bold text-white tracking-wide truncate max-w-[200px]" title={boardTitle}>
+              {boardTitle}
+            </h1>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="text-[9px] text-dark-200 uppercase font-mono">{boardVisibility} room</span>
               <span className="text-[9px] text-dark-300">•</span>
@@ -1082,6 +1270,11 @@ export const Board: React.FC = () => {
           <div className="flex items-center gap-2 pl-1.5 pr-2.5 py-0.5 rounded-lg bg-dark-950/40 text-[10px] text-dark-200">
             <User className="w-3.5 h-3.5 text-brand-500" />
             <span className="font-medium max-w-28 truncate">{user?.email.split('@')[0]}</span>
+            {user?.plan && user.plan !== 'free' && (
+              <span className="ml-1 px-1.5 py-0.2 rounded bg-amber-500/10 border border-amber-500/20 text-[8px] font-bold text-amber-500 uppercase tracking-wider">
+                {user.plan}
+              </span>
+            )}
           </div>
 
           <button
@@ -1277,6 +1470,12 @@ export const Board: React.FC = () => {
         </div>
       )}
 
+      <CreateBoardModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreate={handleCreateTabBoard}
+        creating={creating}
+      />
     </div>
   );
 };

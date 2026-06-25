@@ -25,6 +25,7 @@ export interface CanvasElement {
   fontFamily?: string;
   fontWeight?: 'normal' | 'bold';
   fontStyle?: 'normal' | 'italic';
+  pageIndex?: number;
 }
 
 interface HistoryState {
@@ -38,6 +39,10 @@ interface CanvasState {
   tool: ToolType;
   gridEnabled: boolean;
   snapToGrid: boolean;
+  gridType: 'grid' | 'lines' | 'dots';
+  canvasMode: 'infinite' | 'pages';
+  currentPage: number;
+  totalPages: number;
   
   // Default style state
   strokeColor: string;
@@ -66,6 +71,12 @@ interface CanvasState {
   setTool: (tool: ToolType) => void;
   setGridEnabled: (enabled: boolean) => void;
   setSnapToGrid: (snap: boolean) => void;
+  setGridType: (type: 'grid' | 'lines' | 'dots') => void;
+  setCanvasMode: (mode: 'infinite' | 'pages') => void;
+  setCurrentPage: (page: number) => void;
+  setTotalPages: (total: number) => void;
+  addPage: () => void;
+  deletePage: (pageIndex: number) => void;
   
   // Style actions
   setStrokeColor: (color: string) => void;
@@ -93,6 +104,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   tool: 'selection',
   gridEnabled: false,
   snapToGrid: false,
+  gridType: 'grid',
+  canvasMode: 'pages',
+  currentPage: 1,
+  totalPages: 1,
   
   // Style defaults
   strokeColor: '#8b5cf6', // purple brand
@@ -198,6 +213,48 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   setGridEnabled: (gridEnabled) => set({ gridEnabled }),
   setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
+  setGridType: (gridType) => set({ gridType }),
+  setCanvasMode: (canvasMode) => set({ canvasMode }),
+  setCurrentPage: (currentPage) => set({ currentPage }),
+  setTotalPages: (totalPages) => set({ totalPages }),
+  addPage: () => {
+    const { totalPages } = get();
+    const nextTotal = totalPages + 1;
+    set({
+      totalPages: nextTotal,
+      currentPage: nextTotal
+    });
+  },
+  deletePage: (pageIndex: number) => {
+    const { elements, totalPages, currentPage, history } = get();
+    if (totalPages <= 1) return;
+
+    const prevElements = JSON.parse(JSON.stringify(elements));
+    
+    // Filter out elements on the deleted page and shift down subsequent pages
+    const nextElements = elements
+      .filter(el => (el.pageIndex || 1) !== pageIndex)
+      .map(el => {
+        const elPage = el.pageIndex || 1;
+        if (elPage > pageIndex) {
+          return { ...el, pageIndex: elPage - 1 };
+        }
+        return el;
+      });
+
+    const nextTotalPages = totalPages - 1;
+    const nextCurrentPage = currentPage > nextTotalPages ? nextTotalPages : currentPage;
+
+    set({
+      elements: nextElements,
+      totalPages: nextTotalPages,
+      currentPage: nextCurrentPage,
+      history: {
+        past: [...history.past, prevElements],
+        future: []
+      }
+    });
+  },
 
   setStrokeColor: (strokeColor) => {
     set({ strokeColor });

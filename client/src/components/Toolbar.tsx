@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { ConfirmModal } from './ConfirmModal';
 import { 
   MousePointer, 
   Square, 
@@ -16,11 +17,16 @@ import {
   ZoomIn, 
   ZoomOut, 
   Grid, 
-  Magnet 
+  Magnet,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { useCanvasStore, ToolType } from '../store/useCanvasStore';
 
 export const Toolbar: React.FC = () => {
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const { 
     tool, 
     setTool, 
@@ -30,7 +36,14 @@ export const Toolbar: React.FC = () => {
     setSnapToGrid,
     zoom, 
     setZoom,
-    setPan
+    setPan,
+    canvasMode,
+    setCanvasMode,
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    addPage,
+    deletePage
   } = useCanvasStore();
 
   const tools: { type: ToolType; label: string; icon: React.ReactNode; hotkey: string }[] = [
@@ -52,21 +65,21 @@ export const Toolbar: React.FC = () => {
       <div className="flex items-center gap-1 p-1.5 rounded-2xl glass-panel shadow-2xl">
         <button
           onClick={() => setZoom(z => z - 0.1)}
-          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors"
+          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors disabled:opacity-30 disabled:pointer-events-none"
           title="Zoom Out"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
         <button
           onClick={() => setZoom(1)}
-          className="px-2 py-1 text-xs font-semibold rounded-lg text-brand-500 hover:bg-dark-800 transition-colors"
+          className="px-2 py-1 text-xs font-semibold rounded-lg text-brand-500 hover:bg-dark-800 transition-colors disabled:opacity-30 disabled:pointer-events-none"
           title="Reset Zoom"
         >
           {Math.round(zoom * 100)}%
         </button>
         <button
           onClick={() => setZoom(z => z + 0.1)}
-          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors"
+          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors disabled:opacity-30 disabled:pointer-events-none"
           title="Zoom In"
         >
           <ZoomIn className="w-4 h-4" />
@@ -77,28 +90,28 @@ export const Toolbar: React.FC = () => {
       <div className="flex items-center gap-1 p-1.5 rounded-2xl glass-panel shadow-2xl">
         <button
           onClick={() => setPan(p => ({ ...p, x: p.x + 100 }))}
-          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors"
+          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors disabled:opacity-30 disabled:pointer-events-none"
           title="Scroll Left"
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
         <button
           onClick={() => setPan(p => ({ ...p, y: p.y + 100 }))}
-          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors"
+          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors disabled:opacity-30 disabled:pointer-events-none"
           title="Scroll Up"
         >
           <ArrowUp className="w-4 h-4" />
         </button>
         <button
           onClick={() => setPan(p => ({ ...p, y: p.y - 100 }))}
-          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors"
+          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors disabled:opacity-30 disabled:pointer-events-none"
           title="Scroll Down"
         >
           <ArrowDown className="w-4 h-4" />
         </button>
         <button
           onClick={() => setPan(p => ({ ...p, x: p.x - 100 }))}
-          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors"
+          className="p-2 rounded-xl text-dark-200 hover:bg-dark-800 transition-colors disabled:opacity-30 disabled:pointer-events-none"
           title="Scroll Right"
         >
           <ArrowRight className="w-4 h-4" />
@@ -130,19 +143,8 @@ export const Toolbar: React.FC = () => {
         })}
       </div>
 
-      {/* Grid and Snapping controls */}
+      {/* Snapping controls */}
       <div className="flex items-center gap-1.5 p-1.5 rounded-2xl glass-panel shadow-2xl">
-        <button
-          onClick={() => setGridEnabled(!gridEnabled)}
-          className={`p-2.5 rounded-xl transition-all ${
-            gridEnabled 
-              ? 'bg-dark-800 text-brand-500 border border-brand-500/20' 
-              : 'text-dark-200 hover:bg-dark-800 hover:text-white'
-          }`}
-          title="Toggle Grid (G)"
-        >
-          <Grid className="w-5 h-5" />
-        </button>
         <button
           onClick={() => setSnapToGrid(!snapToGrid)}
           className={`p-2.5 rounded-xl transition-all ${
@@ -155,6 +157,86 @@ export const Toolbar: React.FC = () => {
           <Magnet className="w-5 h-5" />
         </button>
       </div>
+
+      {/* Canvas Mode and Pagination controls */}
+      <div className="flex items-center gap-2.5 p-1.5 rounded-2xl glass-panel shadow-2xl">
+        {/* Page navigation controls */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              if (currentPage > 1) setCurrentPage(currentPage - 1);
+            }}
+            disabled={currentPage === 1}
+            className="p-1.5 rounded-lg bg-dark-950/40 border border-white/5 text-dark-200 hover:text-white hover:bg-dark-800 disabled:opacity-30 disabled:pointer-events-none transition-all"
+            title="Previous Page"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Page Overview Indicator List */}
+          <div className="flex items-center gap-1 max-w-[140px] overflow-x-auto no-scrollbar py-0.5">
+            {Array.from({ length: totalPages }).map((_, idx) => {
+              const pageNum = idx + 1;
+              const isActive = pageNum === currentPage;
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`w-6 h-6 rounded-lg text-[9px] font-bold transition-all border flex items-center justify-center flex-shrink-0 ${
+                    isActive
+                      ? 'bg-brand-600 border-brand-500 text-white shadow-md'
+                      : 'bg-dark-950/40 border-white/5 text-dark-200 hover:text-white hover:border-white/10'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => {
+              if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+            }}
+            disabled={currentPage === totalPages}
+            className="p-1.5 rounded-lg bg-dark-950/40 border border-white/5 text-dark-200 hover:text-white hover:bg-dark-800 disabled:opacity-30 disabled:pointer-events-none transition-all"
+            title="Next Page"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={addPage}
+            className="p-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-700 hover-scale transition-all flex items-center justify-center"
+            title="Add Page"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+
+          {totalPages > 1 && (
+            <button
+              onClick={() => setIsDeleteModalOpen(true)}
+              className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
+              title="Delete Page"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <ConfirmModal
+        isOpen={isDeleteModalOpen}
+        title="Delete Page"
+        message={`Are you sure you want to delete Page ${currentPage}? All shapes on this page will be permanently deleted.`}
+        confirmLabel="Delete"
+        isDanger={true}
+        onConfirm={() => {
+          deletePage(currentPage);
+          setIsDeleteModalOpen(false);
+        }}
+        onCancel={() => setIsDeleteModalOpen(false)}
+      />
     </div>
   );
 };

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { 
-  BringToFront, 
-  SendToBack, 
-  Layers, 
-  Paintbrush, 
-  Maximize2, 
+import {
+  BringToFront,
+  SendToBack,
+  Layers,
+  Paintbrush,
+  Maximize2,
   Grid3X3,
   Sliders,
   ChevronLeft,
@@ -38,19 +38,23 @@ export const StylePanel: React.FC = () => {
     setFontWeight,
     fontStyle,
     setFontStyle,
-    tool
+    tool,
+    gridEnabled,
+    setGridEnabled,
+    gridType,
+    setGridType
   } = useCanvasStore();
 
   const isSelected = selectedIds.length > 0;
 
   // Curated premium color palettes
   const strokeColors = [
-    '#ffffff', '#000000', '#4b5563', '#ef4444', 
+    '#ffffff', '#000000', '#4b5563', '#ef4444',
     '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'
   ];
 
   const fillColors = [
-    'transparent', '#ffffff', '#e5e7eb', '#fca5a5', 
+    'transparent', '#ffffff', '#e5e7eb', '#fca5a5',
     '#fde047', '#86efac', '#93c5fd', '#c084fc', '#fbcfe8'
   ];
 
@@ -95,7 +99,7 @@ export const StylePanel: React.FC = () => {
           <Sliders className="w-4 h-4 text-brand-500" />
           {isSelected ? 'Selection Styles' : 'Canvas Defaults'}
         </h3>
-        
+
         <div className="flex items-center gap-2">
           {isSelected && (
             <span className="text-[10px] bg-brand-600/20 text-brand-500 font-semibold px-2 py-0.5 rounded-full border border-brand-500/20">
@@ -146,8 +150,8 @@ export const StylePanel: React.FC = () => {
               onClick={() => setFillColor(color)}
               className="w-6 h-6 rounded-lg transition-transform hover:scale-110 relative border border-white/10 overflow-hidden"
               style={{
-                background: color === 'transparent' 
-                  ? 'linear-gradient(45deg, #ef4444 25%, transparent 25%), linear-gradient(-45deg, #ef4444 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ef4444 75%), linear-gradient(-45deg, transparent 75%, #ef4444 75%)' 
+                background: color === 'transparent'
+                  ? 'linear-gradient(45deg, #ef4444 25%, transparent 25%), linear-gradient(-45deg, #ef4444 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ef4444 75%), linear-gradient(-45deg, transparent 75%, #ef4444 75%)'
                   : color,
                 backgroundSize: color === 'transparent' ? '8px 8px' : 'auto',
                 backgroundPosition: color === 'transparent' ? '0 0' : 'auto'
@@ -180,11 +184,10 @@ export const StylePanel: React.FC = () => {
                 <button
                   key={f.value}
                   onClick={() => setFontFamily(f.value)}
-                  className={`py-1.5 text-[10px] font-semibold rounded-xl border transition-all truncate px-1 ${
-                    currentFontFamily === f.value
+                  className={`py-1.5 text-[10px] font-semibold rounded-xl border transition-all truncate px-1 ${currentFontFamily === f.value
                       ? 'bg-brand-600 border-brand-500 text-white shadow-lg shadow-brand-600/15'
                       : 'bg-dark-900 border-white/5 text-dark-200 hover:border-white/10 hover:text-white'
-                  }`}
+                    }`}
                   style={{ fontFamily: f.value }}
                 >
                   {f.label}
@@ -201,22 +204,20 @@ export const StylePanel: React.FC = () => {
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setFontWeight(currentFontWeight === 'bold' ? 'normal' : 'bold')}
-                className={`flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-xl border transition-all ${
-                  currentFontWeight === 'bold'
+                className={`flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-xl border transition-all ${currentFontWeight === 'bold'
                     ? 'bg-brand-600 border-brand-500 text-white shadow-lg shadow-brand-600/15'
                     : 'bg-dark-900 border-white/5 text-dark-200 hover:border-white/10 hover:text-white'
-                }`}
+                  }`}
                 title="Toggle Bold"
               >
                 <Bold className="w-3.5 h-3.5" /> Bold
               </button>
               <button
                 onClick={() => setFontStyle(currentFontStyle === 'italic' ? 'normal' : 'italic')}
-                className={`flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-xl border transition-all ${
-                  currentFontStyle === 'italic'
+                className={`flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-xl border transition-all ${currentFontStyle === 'italic'
                     ? 'bg-brand-600 border-brand-500 text-white shadow-lg shadow-brand-600/15'
                     : 'bg-dark-900 border-white/5 text-dark-200 hover:border-white/10 hover:text-white'
-                }`}
+                  }`}
                 title="Toggle Italic"
               >
                 <Italic className="w-3.5 h-3.5" /> Italic
@@ -243,11 +244,10 @@ export const StylePanel: React.FC = () => {
                 <button
                   key={w.value}
                   onClick={() => setStrokeWidth(w.value)}
-                  className={`py-1.5 text-[11px] font-semibold rounded-xl border transition-all ${
-                    strokeWidth === w.value
+                  className={`py-1.5 text-[11px] font-semibold rounded-xl border transition-all ${strokeWidth === w.value
                       ? 'bg-brand-600 border-brand-500 text-white shadow-lg shadow-brand-600/15'
                       : 'bg-dark-900 border-white/5 text-dark-200 hover:border-white/10 hover:text-white'
-                  }`}
+                    }`}
                 >
                   {w.label}
                 </button>
@@ -269,11 +269,10 @@ export const StylePanel: React.FC = () => {
                 <button
                   key={styleOpt.value}
                   onClick={() => setDashStyle(styleOpt.value)}
-                  className={`py-1.5 text-[11px] font-semibold rounded-xl border transition-all ${
-                    dashStyle === styleOpt.value
+                  className={`py-1.5 text-[11px] font-semibold rounded-xl border transition-all ${dashStyle === styleOpt.value
                       ? 'bg-brand-600 border-brand-500 text-white shadow-lg shadow-brand-600/15'
                       : 'bg-dark-900 border-white/5 text-dark-200 hover:border-white/10 hover:text-white'
-                  }`}
+                    }`}
                 >
                   {styleOpt.label}
                 </button>
@@ -284,7 +283,7 @@ export const StylePanel: React.FC = () => {
           {/* 5. ROUGHNESS */}
           <div className="flex flex-col gap-2">
             <div className="flex justify-between items-center text-xs font-medium text-dark-200">
-              <span>Roughness (Rough.js)</span>
+              <span>Roughness</span>
               <span className="text-brand-500 font-semibold">{roughness}</span>
             </div>
             <input
@@ -336,6 +335,45 @@ export const StylePanel: React.FC = () => {
             >
               <SendToBack className="w-3.5 h-3.5 text-brand-500" /> Send Back
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 8. CANVAS BACKGROUND STYLE (Only shown when no elements are selected) */}
+      {!isSelected && (
+        <div className="flex flex-col gap-2 border-t border-dark-800 pt-4 mt-1">
+          <label className="text-xs font-medium text-dark-200 flex items-center gap-1.5">
+            <Grid3X3 className="w-3.5 h-3.5 text-brand-500" /> Background Pattern
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { value: 'none', label: 'Blank Canvas' },
+              { value: 'grid', label: 'Grid Lines' },
+              { value: 'lines', label: 'Ruled Lines' },
+              { value: 'dots', label: 'Dotted Grid' }
+            ] as { value: 'none' | 'grid' | 'lines' | 'dots'; label: string }[]).map((opt) => {
+              const isActive = opt.value === 'none' ? !gridEnabled : (gridEnabled && gridType === opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    if (opt.value === 'none') {
+                      setGridEnabled(false);
+                    } else {
+                      setGridEnabled(true);
+                      setGridType(opt.value);
+                    }
+                  }}
+                  className={`py-2 text-[10px] font-bold rounded-xl border transition-all truncate px-1 ${
+                    isActive
+                      ? 'bg-brand-600 border-brand-500 text-white shadow-lg shadow-brand-600/15'
+                      : 'bg-dark-900 border-white/5 text-dark-200 hover:border-white/10 hover:text-white'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Plus, 
-  Folder, 
+import {
+  Plus,
+  Folder,
   FolderOpen,
   FolderPlus,
   FolderTree,
   ChevronRight,
-  Globe, 
-  GitFork, 
-  Eye, 
-  Clock, 
-  User, 
+  Globe,
+  GitFork,
+  Eye,
+  Clock,
+  User,
   Search,
   Sparkles,
   ArrowRight,
@@ -27,6 +27,9 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { CreateBoardModal } from '../components/CreateBoardModal';
+import { ConfirmModal } from '../components/ConfirmModal';
+import { PromptModal } from '../components/PromptModal';
+import { AlertModal } from '../components/AlertModal';
 
 interface PublicBoard {
   id: string;
@@ -50,7 +53,7 @@ interface Folder {
 export const Explore: React.FC = () => {
   const navigate = useNavigate();
   const { user, accessToken, logout } = useAuthStore();
-  
+
   const [publicBoards, setPublicBoards] = useState<PublicBoard[]>([]);
   const [userBoards, setUserBoards] = useState<any[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -65,6 +68,54 @@ export const Explore: React.FC = () => {
   const [wallpaper, setWallpaper] = useState<string>('default');
   const [customWallpaperUrl, setCustomWallpaperUrl] = useState<string>('');
   const [showWallpaperSelector, setShowWallpaperSelector] = useState(false);
+
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const [promptModalConfig, setPromptModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    placeholder?: string;
+    defaultValue?: string;
+    multiline?: boolean;
+    onConfirm: (value: string) => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const [alertModalConfig, setAlertModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type?: 'success' | 'warning' | 'error' | 'info';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'error'
+  });
+
+  const showAlert = (message: string, title: string = "Error", type: 'success' | 'warning' | 'error' | 'info' = 'error') => {
+    setAlertModalConfig({
+      isOpen: true,
+      title,
+      message,
+      type
+    });
+  };
 
   // Initialize wallpaper on user load
   useEffect(() => {
@@ -116,9 +167,9 @@ export const Explore: React.FC = () => {
       const validRecent = recentIds
         .map(id => userBoards.find(b => b.id === id))
         .filter(Boolean);
-      
+
       setRecentBoards(validRecent);
-      
+
       // Clean deleted boards from local storage
       const validRecentIds = validRecent.map(b => b.id);
       if (validRecentIds.length !== recentIds.length) {
@@ -155,9 +206,9 @@ export const Explore: React.FC = () => {
     if (currentToken && !headers.has('Authorization')) {
       headers.set('Authorization', `Bearer ${currentToken}`);
     }
-    
+
     let res = await fetch(url, { ...options, headers });
-    
+
     if (res.status === 401) {
       // Try to refresh token
       const restored = await useAuthStore.getState().restoreSession();
@@ -205,33 +256,64 @@ export const Explore: React.FC = () => {
   };
 
   const handleCreateFolder = () => {
-    const name = prompt("Enter folder name:");
-    if (!name || !name.trim()) return;
-    const newFolder: Folder = {
-      id: Math.random().toString(36).substring(2, 9),
-      name: name.trim(),
-      boardIds: [],
-      color: '#6b7280' // default Gray
-    };
-    saveFolders([...folders, newFolder]);
+    setPromptModalConfig({
+      isOpen: true,
+      title: "Create Folder",
+      message: "Enter folder name:",
+      placeholder: "e.g. Planning, Designs",
+      defaultValue: "",
+      onConfirm: (name) => {
+        if (!name || !name.trim()) {
+          setPromptModalConfig(prev => ({ ...prev, isOpen: false }));
+          return;
+        }
+        const newFolder: Folder = {
+          id: Math.random().toString(36).substring(2, 9),
+          name: name.trim(),
+          boardIds: [],
+          color: '#6b7280' // default Gray
+        };
+        saveFolders([...folders, newFolder]);
+        setPromptModalConfig(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   const handleRenameFolder = (e: React.MouseEvent, folderId: string, currentName: string) => {
     e.stopPropagation();
-    const newName = prompt("Enter new folder name:", currentName);
-    if (!newName || !newName.trim()) return;
-    const updated = folders.map(f => f.id === folderId ? { ...f, name: newName.trim() } : f);
-    saveFolders(updated);
+    setPromptModalConfig({
+      isOpen: true,
+      title: "Rename Folder",
+      message: "Enter new folder name:",
+      placeholder: "e.g. Planning, Designs",
+      defaultValue: currentName,
+      onConfirm: (newName) => {
+        if (!newName || !newName.trim()) {
+          setPromptModalConfig(prev => ({ ...prev, isOpen: false }));
+          return;
+        }
+        const updated = folders.map(f => f.id === folderId ? { ...f, name: newName.trim() } : f);
+        saveFolders(updated);
+        setPromptModalConfig(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   const handleDeleteFolder = (e: React.MouseEvent, folderId: string) => {
     e.stopPropagation();
-    if (!confirm("Are you sure you want to delete this folder? Workspaces inside it will not be deleted; they will become uncategorized.")) return;
-    const updated = folders.filter(f => f.id !== folderId);
-    saveFolders(updated);
-    if (selectedFolderId === folderId) {
-      setSelectedFolderId('all');
-    }
+    setConfirmModalConfig({
+      isOpen: true,
+      title: "Delete Folder",
+      message: "Are you sure you want to delete this folder? Workspaces inside it will not be deleted; they will become uncategorized.",
+      onConfirm: () => {
+        const updated = folders.filter(f => f.id !== folderId);
+        saveFolders(updated);
+        if (selectedFolderId === folderId) {
+          setSelectedFolderId('all');
+        }
+        setConfirmModalConfig(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   const handleMoveBoardToFolder = (boardId: string, destFolderId: string | null) => {
@@ -253,8 +335,8 @@ export const Explore: React.FC = () => {
   const filteredBoards = selectedFolderId === 'all'
     ? userBoards
     : selectedFolderId === 'uncategorized'
-    ? userBoards.filter(b => !isBoardInAnyFolder(b.id))
-    : userBoards.filter(b => {
+      ? userBoards.filter(b => !isBoardInAnyFolder(b.id))
+      : userBoards.filter(b => {
         const f = folders.find(folder => folder.id === selectedFolderId);
         return f ? f.boardIds.includes(b.id) : false;
       });
@@ -387,55 +469,71 @@ export const Explore: React.FC = () => {
   // 2.5 RENAME BOARD
   const handleRenameBoard = async (e: React.MouseEvent, boardId: string, currentTitle: string) => {
     e.stopPropagation(); // Prevent navigating to the board page
-    const newTitle = prompt("Enter a new name for this whiteboard:", currentTitle);
-    if (newTitle === null) return; // Cancelled
-    const trimmedTitle = newTitle.trim();
-    if (!trimmedTitle) {
-      alert("Board name cannot be empty.");
-      return;
-    }
-
-    try {
-      const res = await authenticatedFetch(`/api/boards/${boardId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ title: trimmedTitle })
-      });
-      if (res.ok) {
-        setUserBoards(prev => prev.map(b => b.id === boardId ? { ...b, title: trimmedTitle } : b));
-        setPublicBoards(prev => prev.map(b => b.id === boardId ? { ...b, title: trimmedTitle } : b));
-      } else {
-        const data = await res.json();
-        alert(data.error || "Failed to rename board.");
+    setPromptModalConfig({
+      isOpen: true,
+      title: "Rename Whiteboard",
+      message: "Enter a new name for this whiteboard:",
+      placeholder: "e.g. Brainstorming",
+      defaultValue: currentTitle,
+      onConfirm: async (newTitle) => {
+        if (!newTitle || !newTitle.trim()) {
+          showAlert("Board name cannot be empty.");
+          setPromptModalConfig(prev => ({ ...prev, isOpen: false }));
+          return;
+        }
+        const trimmedTitle = newTitle.trim();
+        try {
+          const res = await authenticatedFetch(`/api/boards/${boardId}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ title: trimmedTitle })
+          });
+          if (res.ok) {
+            setUserBoards(prev => prev.map(b => b.id === boardId ? { ...b, title: trimmedTitle } : b));
+            setPublicBoards(prev => prev.map(b => b.id === boardId ? { ...b, title: trimmedTitle } : b));
+          } else {
+            const data = await res.json();
+            showAlert(data.error || "Failed to rename board.");
+          }
+        } catch (err) {
+          console.error(err);
+          showAlert("Failed to connect to server.");
+        } finally {
+          setPromptModalConfig(prev => ({ ...prev, isOpen: false }));
+        }
       }
-    } catch (err) {
-      console.error(err);
-      alert("Failed to connect to server.");
-    }
+    });
   };
 
   // 2.6 DELETE BOARD
   const handleDeleteBoard = async (e: React.MouseEvent, boardId: string) => {
     e.stopPropagation(); // Prevent navigating to the board page
-    if (!confirm("Are you sure you want to permanently delete this whiteboard? This action cannot be undone.")) return;
-
-    try {
-      const res = await authenticatedFetch(`/api/boards/${boardId}`, {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        setUserBoards(prev => prev.filter(b => b.id !== boardId));
-        setPublicBoards(prev => prev.filter(b => b.id !== boardId));
-      } else {
-        const data = await res.json();
-        alert(data.error || "Failed to delete board.");
+    setConfirmModalConfig({
+      isOpen: true,
+      title: "Delete Whiteboard",
+      message: "Are you sure you want to permanently delete this whiteboard? This action cannot be undone.",
+      onConfirm: async () => {
+        try {
+          const res = await authenticatedFetch(`/api/boards/${boardId}`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            setUserBoards(prev => prev.filter(b => b.id !== boardId));
+            setPublicBoards(prev => prev.filter(b => b.id !== boardId));
+          } else {
+            const data = await res.json();
+            showAlert(data.error || "Failed to delete board.");
+          }
+        } catch (err) {
+          console.error(err);
+          showAlert("Failed to connect to server.");
+        } finally {
+          setConfirmModalConfig(prev => ({ ...prev, isOpen: false }));
+        }
       }
-    } catch (err) {
-      console.error(err);
-      alert("Failed to connect to server.");
-    }
+    });
   };
 
   // 3. DUPLICATE/FORK BOARD FLOW
@@ -450,7 +548,7 @@ export const Explore: React.FC = () => {
       if (res.ok && data.id) {
         navigate(`/board/${data.id}`);
       } else {
-        alert(data.error || 'Fork failed. Confirm board allows cloning.');
+        showAlert(data.error || 'Fork failed. Confirm board allows cloning.');
       }
     } catch (err) {
       console.error(err);
@@ -462,34 +560,43 @@ export const Explore: React.FC = () => {
   // 4. EDIT DESCRIPTION FLOW
   const handleEditDescription = async (e: React.MouseEvent, boardId: string, currentDesc: string) => {
     e.stopPropagation(); // Prevent navigating to the board page
-    const newDesc = prompt("Enter a description for this whiteboard:", currentDesc || "");
-    if (newDesc === null) return; // Cancelled
-    const trimmedDesc = newDesc.trim();
-
-    try {
-      const res = await authenticatedFetch(`/api/boards/${boardId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: trimmedDesc })
-      });
-      if (res.ok) {
-        setUserBoards(prev => prev.map(b => b.id === boardId ? { ...b, description: trimmedDesc } : b));
-        setPublicBoards(prev => prev.map(b => b.id === boardId ? { ...b, description: trimmedDesc } : b));
-      } else {
-        const data = await res.json();
-        alert(data.error || "Failed to update description.");
+    setPromptModalConfig({
+      isOpen: true,
+      title: "Edit Description",
+      message: "Enter a description for this whiteboard:",
+      placeholder: "e.g. Session notes...",
+      defaultValue: currentDesc || "",
+      multiline: true,
+      onConfirm: async (newDesc) => {
+        const trimmedDesc = newDesc.trim();
+        try {
+          const res = await authenticatedFetch(`/api/boards/${boardId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ description: trimmedDesc })
+          });
+          if (res.ok) {
+            setUserBoards(prev => prev.map(b => b.id === boardId ? { ...b, description: trimmedDesc } : b));
+            setPublicBoards(prev => prev.map(b => b.id === boardId ? { ...b, description: trimmedDesc } : b));
+          } else {
+            const data = await res.json();
+            showAlert(data.error || "Failed to update description.");
+          }
+        } catch (err) {
+          console.error(err);
+          showAlert("Failed to connect to server.");
+        } finally {
+          setPromptModalConfig(prev => ({ ...prev, isOpen: false }));
+        }
       }
-    } catch (err) {
-      console.error(err);
-      alert("Failed to connect to server.");
-    }
+    });
   };
 
   const wallpaperClass = getWallpaperClass();
   const wallpaperStyle = getWallpaperStyle();
 
   return (
-    <div 
+    <div
       className={`min-h-screen text-dark-100 flex flex-col transition-all duration-300 ${wallpaperClass}`}
       style={wallpaperStyle}
     >
@@ -514,7 +621,7 @@ export const Explore: React.FC = () => {
               <Settings className="w-4 h-4" /> Admin Console
             </button>
           )}
-          
+
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-900 border border-white/5 text-[11px] text-dark-200 font-medium">
             <User className="w-4 h-4 text-brand-500" />
             <span>{user?.email}</span>
@@ -541,33 +648,29 @@ export const Explore: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => handleSelectWallpaper('default')}
-                    className={`h-12 rounded-xl border flex items-center justify-center text-[10px] font-bold bg-dark-950 ${
-                      wallpaper === 'default' ? 'border-brand-500 text-brand-500' : 'border-white/5 text-dark-200'
-                    }`}
+                    className={`h-12 rounded-xl border flex items-center justify-center text-[10px] font-bold bg-dark-950 ${wallpaper === 'default' ? 'border-brand-500 text-brand-500' : 'border-white/5 text-dark-200'
+                      }`}
                   >
-                    Default Dark
+                    Default
                   </button>
                   <button
                     onClick={() => handleSelectWallpaper('purple-dusk')}
-                    className={`h-12 rounded-xl border flex items-center justify-center text-[10px] font-bold bg-gradient-to-br from-indigo-950 via-dark-950 to-purple-950 ${
-                      wallpaper === 'purple-dusk' ? 'border-brand-500 text-brand-500' : 'border-white/5 text-dark-200'
-                    }`}
+                    className={`h-12 rounded-xl border flex items-center justify-center text-[10px] font-bold bg-gradient-to-br from-indigo-950 via-dark-950 to-purple-950 ${wallpaper === 'purple-dusk' ? 'border-brand-500 text-brand-500' : 'border-white/5 text-dark-200'
+                      }`}
                   >
                     Purple Dusk
                   </button>
                   <button
                     onClick={() => handleSelectWallpaper('midnight-forest')}
-                    className={`h-12 rounded-xl border flex items-center justify-center text-[10px] font-bold bg-gradient-to-br from-slate-950 via-dark-950 to-emerald-950 ${
-                      wallpaper === 'midnight-forest' ? 'border-brand-500 text-brand-500' : 'border-white/5 text-dark-200'
-                    }`}
+                    className={`h-12 rounded-xl border flex items-center justify-center text-[10px] font-bold bg-gradient-to-br from-slate-950 via-dark-950 to-emerald-950 ${wallpaper === 'midnight-forest' ? 'border-brand-500 text-brand-500' : 'border-white/5 text-dark-200'
+                      }`}
                   >
                     Midnight Forest
                   </button>
                   <button
                     onClick={() => handleSelectWallpaper('aurora')}
-                    className={`h-12 rounded-xl border flex items-center justify-center text-[10px] font-bold bg-gradient-to-br from-teal-950 via-dark-950 to-rose-950 ${
-                      wallpaper === 'aurora' ? 'border-brand-500 text-brand-500' : 'border-white/5 text-dark-200'
-                    }`}
+                    className={`h-12 rounded-xl border flex items-center justify-center text-[10px] font-bold bg-gradient-to-br from-teal-950 via-dark-950 to-rose-950 ${wallpaper === 'aurora' ? 'border-brand-500 text-brand-500' : 'border-white/5 text-dark-200'
+                      }`}
                   >
                     Aurora Dusk
                   </button>
@@ -588,9 +691,8 @@ export const Explore: React.FC = () => {
                   {customWallpaperUrl && (
                     <button
                       onClick={() => handleSelectWallpaper('custom')}
-                      className={`h-8 rounded-xl border text-[9px] font-bold ${
-                        wallpaper === 'custom' ? 'border-brand-500 text-brand-500' : 'border-white/5 text-dark-200'
-                      }`}
+                      className={`h-8 rounded-xl border text-[9px] font-bold ${wallpaper === 'custom' ? 'border-brand-500 text-brand-500' : 'border-white/5 text-dark-200'
+                        }`}
                     >
                       Use Uploaded
                     </button>
@@ -620,7 +722,7 @@ export const Explore: React.FC = () => {
 
       {/* Workspace Catalog Body */}
       <main className="flex-1 w-full px-8 py-8 flex flex-col md:flex-row gap-8">
-        
+
         {/* Left Side Pane: Folders Sidebar */}
         <aside className="w-full md:w-64 flex flex-col gap-5 flex-shrink-0">
           <div className="glass-panel rounded-3xl p-5 flex flex-col gap-4">
@@ -640,11 +742,10 @@ export const Explore: React.FC = () => {
             <div className="flex flex-col gap-1.5">
               <button
                 onClick={() => setSelectedFolderId('all')}
-                className={`flex justify-between items-center px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all ${
-                  selectedFolderId === 'all'
+                className={`flex justify-between items-center px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all ${selectedFolderId === 'all'
                     ? 'bg-brand-600 text-white shadow-md shadow-brand-600/10'
                     : 'bg-dark-900 hover:bg-dark-900/60 border border-white/5 text-dark-200 hover:text-white'
-                }`}
+                  }`}
               >
                 <span className="flex items-center gap-2">
                   <FolderOpen className="w-4 h-4" /> All Workspaces
@@ -654,11 +755,10 @@ export const Explore: React.FC = () => {
 
               <button
                 onClick={() => setSelectedFolderId('uncategorized')}
-                className={`flex justify-between items-center px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all ${
-                  selectedFolderId === 'uncategorized'
+                className={`flex justify-between items-center px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all ${selectedFolderId === 'uncategorized'
                     ? 'bg-brand-600 text-white shadow-md shadow-brand-600/10'
                     : 'bg-dark-900 hover:bg-dark-900/60 border border-white/5 text-dark-200 hover:text-white'
-                }`}
+                  }`}
               >
                 <span className="flex items-center gap-2">
                   <Folder className="w-4 h-4" /> Uncategorized
@@ -678,11 +778,10 @@ export const Explore: React.FC = () => {
                     <div
                       key={f.id}
                       onClick={() => setSelectedFolderId(f.id)}
-                      className={`flex justify-between items-center px-3 py-2 rounded-2xl text-xs font-semibold transition-all cursor-pointer group/folder border border-white/5 ${
-                        selectedFolderId === f.id
+                      className={`flex justify-between items-center px-3 py-2 rounded-2xl text-xs font-semibold transition-all cursor-pointer group/folder border border-white/5 ${selectedFolderId === f.id
                           ? 'bg-brand-600 text-white shadow-md shadow-brand-600/10 border-brand-500/20'
                           : 'bg-dark-900 hover:bg-dark-900/60 text-dark-200 hover:text-white'
-                      }`}
+                        }`}
                     >
                       <span className="flex items-center gap-2 truncate max-w-[120px]" title={f.name}>
                         <Folder className="w-4 h-4 flex-shrink-0" fill={f.color || '#6b7280'} style={{ color: f.color || '#6b7280' }} /> {f.name}
@@ -726,7 +825,7 @@ export const Explore: React.FC = () => {
                             <span className="text-[9px] bg-dark-950/40 px-1.5 py-0.5 rounded-full border border-white/5 flex-shrink-0 font-bold text-dark-100">
                               {f.boardIds.length}
                             </span>
-                            
+
                             <button
                               onClick={(e) => handleRenameFolder(e, f.id, f.name)}
                               className="p-0.5 rounded text-dark-200 hover:text-white transition-colors opacity-0 group-hover/folder:opacity-100"
@@ -777,27 +876,25 @@ export const Explore: React.FC = () => {
 
         {/* Right Side Content Panel */}
         <div className="flex-1 flex flex-col gap-8 min-w-0">
-          
+
           {/* Tabs Navigation */}
           <div className="flex border-b border-dark-800 gap-6">
             <button
               onClick={() => setActiveTab('my-workspaces')}
-              className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
-                activeTab === 'my-workspaces'
+              className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'my-workspaces'
                   ? 'border-brand-500 text-white'
                   : 'border-transparent text-dark-200 hover:text-white'
-              }`}
+                }`}
             >
               <Folder className="w-4 h-4 text-brand-500" />
               My Workspaces ({filteredBoards.length})
             </button>
             <button
               onClick={() => setActiveTab('discover')}
-              className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
-                activeTab === 'discover'
+              className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'discover'
                   ? 'border-brand-500 text-white'
                   : 'border-transparent text-dark-200 hover:text-white'
-              }`}
+                }`}
             >
               <Globe className="w-4 h-4 text-brand-500" />
               Discover Templates ({publicBoards.length})
@@ -809,12 +906,12 @@ export const Explore: React.FC = () => {
             <section className="flex flex-col gap-4">
               <div className="flex justify-between items-center">
                 <h2 className="text-sm font-semibold tracking-wider text-dark-200 uppercase flex items-center gap-2">
-                  <FolderOpen className="w-4 h-4 text-brand-500" /> 
-                  {selectedFolderId === 'all' 
-                    ? 'All Workspaces' 
-                    : selectedFolderId === 'uncategorized' 
-                    ? 'Uncategorized Workspaces' 
-                    : `${folders.find(f => f.id === selectedFolderId)?.name || 'Folder'} Workspaces`}
+                  <FolderOpen className="w-4 h-4 text-brand-500" />
+                  {selectedFolderId === 'all'
+                    ? 'All Workspaces'
+                    : selectedFolderId === 'uncategorized'
+                      ? 'Uncategorized Workspaces'
+                      : `${folders.find(f => f.id === selectedFolderId)?.name || 'Folder'} Workspaces`}
                 </h2>
                 <button
                   onClick={() => setIsCreateModalOpen(true)}
@@ -831,8 +928,8 @@ export const Explore: React.FC = () => {
                   <Folder className="w-10 h-10 text-dark-200" />
                   <h4 className="text-xs font-bold text-white">No workspaces here</h4>
                   <p className="text-[10px] text-dark-200 max-w-sm">
-                    {selectedFolderId === 'all' 
-                      ? 'Click "New Whiteboard" to spin up an infinite workspace mapping. Free accounts can host up to 3 rooms.'
+                    {selectedFolderId === 'all'
+                      ? 'Click "New Whiteboard" to spin up a multi-page workspace mapping. Free accounts can host up to 3 rooms.'
                       : 'Assign existing workspaces to this folder or create a new whiteboard.'}
                   </p>
                 </div>
@@ -861,33 +958,31 @@ export const Explore: React.FC = () => {
                             >
                               <FolderPlus className="w-3.5 h-3.5" />
                             </button>
-                            
+
                             {activeDropdownBoardId === b.id && (
-                              <div 
+                              <div
                                 className="absolute right-0 mt-2 bg-dark-900 border border-white/5 rounded-2xl p-2 z-20 shadow-xl w-48 text-[11px] flex flex-col gap-1"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <p className="text-[9px] font-bold text-dark-200 uppercase px-2 py-1 border-b border-dark-800 mb-1">Move to Folder</p>
-                                
+
                                 <button
                                   onClick={() => handleMoveBoardToFolder(b.id, null)}
-                                  className={`text-left px-2 py-1.5 rounded-xl hover:bg-dark-950/40 text-dark-200 hover:text-white flex items-center gap-1.5 font-medium ${
-                                    !isBoardInAnyFolder(b.id) ? 'text-brand-500 hover:text-brand-500' : ''
-                                  }`}
+                                  className={`text-left px-2 py-1.5 rounded-xl hover:bg-dark-950/40 text-dark-200 hover:text-white flex items-center gap-1.5 font-medium ${!isBoardInAnyFolder(b.id) ? 'text-brand-500 hover:text-brand-500' : ''
+                                    }`}
                                 >
                                   <Folder className="w-3.5 h-3.5 flex-shrink-0" />
                                   <span>None (Uncategorized)</span>
                                 </button>
-                                
+
                                 {folders.map(f => {
                                   const isAssigned = f.boardIds.includes(b.id);
                                   return (
                                     <button
                                       key={f.id}
                                       onClick={() => handleMoveBoardToFolder(b.id, f.id)}
-                                      className={`text-left px-2 py-1.5 rounded-xl hover:bg-dark-950/40 text-dark-200 hover:text-white flex items-center gap-1.5 font-medium ${
-                                        isAssigned ? 'text-brand-500 hover:text-brand-500' : ''
-                                      }`}
+                                      className={`text-left px-2 py-1.5 rounded-xl hover:bg-dark-950/40 text-dark-200 hover:text-white flex items-center gap-1.5 font-medium ${isAssigned ? 'text-brand-500 hover:text-brand-500' : ''
+                                        }`}
                                     >
                                       <Folder className="w-3.5 h-3.5 flex-shrink-0" />
                                       <span className="truncate">{f.name}</span>
@@ -927,7 +1022,6 @@ export const Explore: React.FC = () => {
                         <p className="text-xs text-dark-200/80 line-clamp-2 font-medium" title={b.description || 'No description'}>
                           {b.description || <span className="text-dark-400 italic">No description</span>}
                         </p>
-                        <p className="text-[9px] text-dark-400 font-mono mt-1 truncate">ID: {b.id}</p>
                       </div>
                       <div className="flex items-center justify-between border-t border-dark-800 pt-3 mt-1 text-[10px] text-dark-200 font-medium">
                         <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5 text-brand-500" /> {b.view_count} views</span>
@@ -1000,6 +1094,33 @@ export const Explore: React.FC = () => {
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateBoard}
         creating={creating}
+      />
+
+      <ConfirmModal
+        isOpen={confirmModalConfig.isOpen}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        onConfirm={confirmModalConfig.onConfirm}
+        onCancel={() => setConfirmModalConfig(prev => ({ ...prev, isOpen: false }))}
+      />
+
+      <PromptModal
+        isOpen={promptModalConfig.isOpen}
+        title={promptModalConfig.title}
+        message={promptModalConfig.message}
+        placeholder={promptModalConfig.placeholder}
+        defaultValue={promptModalConfig.defaultValue}
+        multiline={promptModalConfig.multiline}
+        onConfirm={promptModalConfig.onConfirm}
+        onCancel={() => setPromptModalConfig(prev => ({ ...prev, isOpen: false }))}
+      />
+
+      <AlertModal
+        isOpen={alertModalConfig.isOpen}
+        title={alertModalConfig.title}
+        message={alertModalConfig.message}
+        type={alertModalConfig.type}
+        onClose={() => setAlertModalConfig(prev => ({ ...prev, isOpen: false }))}
       />
     </div>
   );

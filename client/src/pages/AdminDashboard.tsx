@@ -19,6 +19,8 @@ import {
   Check
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
+import { ConfirmModal } from '../components/ConfirmModal';
+import { AlertModal } from '../components/AlertModal';
 
 interface AdminStats {
   dbLatency: number;
@@ -82,6 +84,39 @@ export const AdminDashboard: React.FC = () => {
   const [generatedResetLink, setGeneratedResetLink] = useState('');
   const [showResetLinkModal, setShowResetLinkModal] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const [alertModalConfig, setAlertModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type?: 'success' | 'warning' | 'error' | 'info';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'error'
+  });
+
+  const showAlert = (message: string, title: string = "Notice", type: 'success' | 'warning' | 'error' | 'info' = 'info') => {
+    setAlertModalConfig({
+      isOpen: true,
+      title,
+      message,
+      type
+    });
+  };
 
   // Redirect non-admin users
   useEffect(() => {
@@ -176,7 +211,7 @@ export const AdminDashboard: React.FC = () => {
         headers: { 'Authorization': `Bearer ${accessToken}` }
       });
       const data = await res.json();
-      alert(data.message || 'Sessions terminated.');
+      showAlert(data.message || 'Sessions terminated.', 'Success', 'success');
       loadUsersList();
     } catch (err) {
       console.error(err);
@@ -195,7 +230,7 @@ export const AdminDashboard: React.FC = () => {
         setGeneratedResetLink(data.resetLink);
         setShowResetLinkModal(true);
       } else {
-        alert(data.error || 'Failed to generate reset link.');
+        showAlert(data.error || 'Failed to generate reset link.');
       }
     } catch (err) {
       console.error(err);
@@ -242,39 +277,55 @@ export const AdminDashboard: React.FC = () => {
 
   // Moderator Delete Board action
   const handleDeleteBoard = async (boardId: string) => {
-    if (!window.confirm('Are you sure you want to permanently delete this public board?')) return;
-    try {
-      const res = await fetch(`/api/boards/${boardId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-      });
-      if (res.ok) {
-        loadModerationBoards();
-        loadHealthStats();
+    setConfirmModalConfig({
+      isOpen: true,
+      title: "Delete Public Board",
+      message: "Are you sure you want to permanently delete this public board?",
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/boards/${boardId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+          if (res.ok) {
+            loadModerationBoards();
+            loadHealthStats();
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setConfirmModalConfig(prev => ({ ...prev, isOpen: false }));
+        }
       }
-    } catch (err) {
-      console.error(err);
-    }
+    });
   };
 
   // Delete User Account
   const handleDeleteUser = async (userId: number) => {
-    if (!window.confirm('Delete user account and all owned boards permanently?')) return;
-    try {
-      const res = await fetch(`/api/admin/users/${userId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-      });
-      if (res.ok) {
-        loadUsersList();
-        loadHealthStats();
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Failed to delete user.');
+    setConfirmModalConfig({
+      isOpen: true,
+      title: "Delete User Account",
+      message: "Delete user account and all owned boards permanently?",
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+          if (res.ok) {
+            loadUsersList();
+            loadHealthStats();
+          } else {
+            const data = await res.json();
+            showAlert(data.error || 'Failed to delete user.');
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setConfirmModalConfig(prev => ({ ...prev, isOpen: false }));
+        }
       }
-    } catch (err) {
-      console.error(err);
-    }
+    });
   };
 
   const handleCopyResetLink = async () => {
@@ -737,6 +788,21 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
+      <ConfirmModal
+        isOpen={confirmModalConfig.isOpen}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        onConfirm={confirmModalConfig.onConfirm}
+        onCancel={() => setConfirmModalConfig(prev => ({ ...prev, isOpen: false }))}
+      />
+
+      <AlertModal
+        isOpen={alertModalConfig.isOpen}
+        title={alertModalConfig.title}
+        message={alertModalConfig.message}
+        type={alertModalConfig.type}
+        onClose={() => setAlertModalConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

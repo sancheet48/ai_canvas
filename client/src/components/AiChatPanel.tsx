@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { AlertModal } from './AlertModal';
 import { 
   Bot, 
   Send, 
@@ -25,7 +26,7 @@ interface Message {
 }
 
 export const AiChatPanel: React.FC = () => {
-  const { elements, setElements, undo } = useCanvasStore();
+  const { elements, setElements, undo, canvasMode, currentPage } = useCanvasStore();
   const { accessToken } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -39,6 +40,27 @@ export const AiChatPanel: React.FC = () => {
   // Toast notification state
   const [toastMsg, setToastMsg] = useState('');
   const [showToast, setShowToast] = useState(false);
+
+  const [alertModalConfig, setAlertModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type?: 'success' | 'warning' | 'error' | 'info';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'error'
+  });
+
+  const showAlert = (message: string, title: string = "AI Copilot Error", type: 'success' | 'warning' | 'error' | 'info' = 'error') => {
+    setAlertModalConfig({
+      isOpen: true,
+      title,
+      message,
+      type
+    });
+  };
 
   const threadEndRef = useRef<HTMLDivElement>(null);
 
@@ -116,7 +138,7 @@ export const AiChatPanel: React.FC = () => {
       // Regex to match code blocks wrapped in ```canvas-elements ... ```
       const match = content.match(/```canvas-elements\n([\s\S]*?)```/);
       if (!match || !match[1]) {
-        alert('Could not find shape elements block in this response.');
+        showAlert('Could not find shape elements block in this response.');
         return;
       }
 
@@ -124,7 +146,7 @@ export const AiChatPanel: React.FC = () => {
       const newElements: CanvasElement[] = JSON.parse(rawJson);
 
       if (!Array.isArray(newElements)) {
-        alert('Format error: AI response was not a valid shapes list array.');
+        showAlert('Format error: AI response was not a valid shapes list array.');
         return;
       }
 
@@ -163,7 +185,8 @@ export const AiChatPanel: React.FC = () => {
         strokeWidth: el.strokeWidth || 2,
         dashStyle: el.dashStyle || 'solid',
         roughness: el.roughness ?? 1,
-        seed: el.seed || Math.floor(Math.random() * 100000)
+        seed: el.seed || Math.floor(Math.random() * 100000),
+        pageIndex: canvasMode === 'pages' ? currentPage : undefined
       }));
 
       // Append to canvas elements store
@@ -176,7 +199,7 @@ export const AiChatPanel: React.FC = () => {
 
     } catch (err: any) {
       console.error(err);
-      alert(`Parsing failed: ${err.message}`);
+      showAlert(`Parsing failed: ${err.message}`);
     }
   };
 
@@ -353,6 +376,14 @@ export const AiChatPanel: React.FC = () => {
           </button>
         </div>
       )}
+
+      <AlertModal
+        isOpen={alertModalConfig.isOpen}
+        title={alertModalConfig.title}
+        message={alertModalConfig.message}
+        type={alertModalConfig.type}
+        onClose={() => setAlertModalConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </>
   );
 };

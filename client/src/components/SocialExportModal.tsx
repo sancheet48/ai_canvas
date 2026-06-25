@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AlertModal } from './AlertModal';
 import { 
   X, 
   Download, 
@@ -46,6 +47,27 @@ export const SocialExportModal: React.FC<SocialExportModalProps> = ({ canvasRef,
   // Copy success feedback states
   const [copiedText, setCopiedText] = useState(false);
   const [successPostUrl, setSuccessPostUrl] = useState('');
+
+  const [alertModalConfig, setAlertModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type?: 'success' | 'warning' | 'error' | 'info';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'error'
+  });
+
+  const showAlert = (message: string, title: string = "Publish Error", type: 'success' | 'warning' | 'error' | 'info' = 'error') => {
+    setAlertModalConfig({
+      isOpen: true,
+      title,
+      message,
+      type
+    });
+  };
 
   // 1. FETCH SOCIAL STATUS
   useEffect(() => {
@@ -176,7 +198,7 @@ export const SocialExportModal: React.FC<SocialExportModalProps> = ({ canvasRef,
       setCopiedText(true);
       setTimeout(() => setCopiedText(false), 3000);
     } catch (err: any) {
-      alert(err.message);
+      showAlert(err.message);
     } finally {
       setPublishingLinkedin(false);
     }
@@ -204,7 +226,7 @@ export const SocialExportModal: React.FC<SocialExportModalProps> = ({ canvasRef,
       setCopiedText(true);
       setTimeout(() => setCopiedText(false), 3000);
     } catch (err: any) {
-      alert(err.message);
+      showAlert(err.message);
     } finally {
       setPublishingTwitter(false);
     }
@@ -483,6 +505,14 @@ export const SocialExportModal: React.FC<SocialExportModalProps> = ({ canvasRef,
           </div>
         )}
       </div>
+
+      <AlertModal
+        isOpen={alertModalConfig.isOpen}
+        title={alertModalConfig.title}
+        message={alertModalConfig.message}
+        type={alertModalConfig.type}
+        onClose={() => setAlertModalConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

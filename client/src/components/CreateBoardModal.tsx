@@ -60,7 +60,7 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-bold text-white uppercase tracking-wider">New Whiteboard</h2>
-              <p className="text-[10px] text-dark-200">Initialize a new infinite canvas room</p>
+              <p className="text-[10px] text-dark-200">Initialize a new multi-page whiteboard room</p>
             </div>
           </div>
           <button 

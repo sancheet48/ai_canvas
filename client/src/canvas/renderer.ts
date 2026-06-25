@@ -190,37 +190,70 @@ export function drawElement(ctx: CanvasRenderingContext2D, rc: any, element: Can
 }
 
 // 4. DRAW SNAP GRID PATTERN
-export function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, pan: { x: number; y: number }, zoom: number) {
+export function drawGridInsideBounds(
+  ctx: CanvasRenderingContext2D,
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  gridType: 'grid' | 'lines' | 'dots' = 'grid'
+) {
   ctx.save();
   const isDark = document.documentElement.classList.contains('dark');
-  ctx.strokeStyle = isDark ? '#1f2937' : '#e5e7eb'; // adaptive grid lines color
+  ctx.strokeStyle = isDark ? 'rgba(75, 85, 99, 0.4)' : 'rgba(209, 213, 219, 0.7)'; // subtle lines
+  ctx.fillStyle = isDark ? 'rgba(156, 163, 175, 0.5)' : 'rgba(107, 114, 128, 0.5)'; // subtle dots
   ctx.lineWidth = 0.5;
-
-  const startX = -pan.x / zoom;
-  const startY = -pan.y / zoom;
-  const endX = (width - pan.x) / zoom;
-  const endY = (height - pan.y) / zoom;
 
   // Align start coordinates to step size
   const firstCol = Math.floor(startX / GRID_STEP) * GRID_STEP;
   const firstRow = Math.floor(startY / GRID_STEP) * GRID_STEP;
 
-  ctx.beginPath();
-  
-  // Vertical grid lines
-  for (let x = firstCol; x <= endX; x += GRID_STEP) {
-    ctx.moveTo(x, startY);
-    ctx.lineTo(x, endY);
-  }
+  if (gridType === 'dots') {
+    for (let x = firstCol; x <= endX; x += GRID_STEP) {
+      for (let y = firstRow; y <= endY; y += GRID_STEP) {
+        if (x < startX || x > endX || y < startY || y > endY) continue;
+        ctx.beginPath();
+        ctx.arc(x, y, 1.2, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
+  } else {
+    ctx.beginPath();
+    
+    // Vertical grid lines (only for 'grid')
+    if (gridType === 'grid') {
+      for (let x = firstCol; x <= endX; x += GRID_STEP) {
+        if (x < startX || x > endX) continue;
+        ctx.moveTo(x, startY);
+        ctx.lineTo(x, endY);
+      }
+    }
 
-  // Horizontal grid lines
-  for (let y = firstRow; y <= endY; y += GRID_STEP) {
-    ctx.moveTo(startX, y);
-    ctx.lineTo(endX, y);
-  }
+    // Horizontal grid lines (for 'grid' and 'lines')
+    for (let y = firstRow; y <= endY; y += GRID_STEP) {
+      if (y < startY || y > endY) continue;
+      ctx.moveTo(startX, y);
+      ctx.lineTo(endX, y);
+    }
 
-  ctx.stroke();
+    ctx.stroke();
+  }
   ctx.restore();
+}
+
+export function drawGrid(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  pan: { x: number; y: number },
+  zoom: number,
+  gridType: 'grid' | 'lines' | 'dots' = 'grid'
+) {
+  const startX = -pan.x / zoom;
+  const startY = -pan.y / zoom;
+  const endX = (width - pan.x) / zoom;
+  const endY = (height - pan.y) / zoom;
+  drawGridInsideBounds(ctx, startX, startY, endX, endY, gridType);
 }
 
 // 5. DRAW ACTIVE BORDERS & RESIZING HANGER BOXES

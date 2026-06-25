@@ -43,7 +43,7 @@ import {
   getElementCenter,
   rotatePoint
 } from '../canvas/transforms';
-import { drawElement, drawGrid, drawSelectionBox, drawCollaboratorCursor } from '../canvas/renderer';
+import { drawElement, drawGrid, drawGridInsideBounds, drawSelectionBox, drawCollaboratorCursor } from '../canvas/renderer';
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
@@ -77,8 +77,22 @@ export const Board: React.FC = () => {
     opacity,
     strokeWidth,
     dashStyle,
-    roughness
+    roughness,
+    gridType,
+    setGridType,
+    canvasMode,
+    setCanvasMode,
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    setTotalPages,
+    addPage,
+    deletePage
   } = useCanvasStore();
+
+  const visibleElements = canvasMode === 'pages'
+    ? elements.filter(el => (el.pageIndex || 1) === currentPage)
+    : elements;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -313,6 +327,19 @@ export const Board: React.FC = () => {
             setBoardTitle(boardData.title || 'Untitled Board');
             if (boardData.data) {
               setElements(boardData.data, true); // load board elements without pushing history
+              
+              if (id) {
+                const storedTotal = localStorage.getItem(`total_pages_${id}`);
+                
+                const initialElements = boardData.data as CanvasElement[];
+                const maxPage = initialElements.reduce((max, el) => Math.max(max, el.pageIndex || 1), 1);
+                
+                const total = storedTotal ? parseInt(storedTotal, 10) : maxPage;
+                
+                setCanvasMode('pages');
+                setTotalPages(total);
+                setCurrentPage(1);
+              }
             }
             if (user?.email && id) {
               const key = `whiteboard_recent_${user.email}`;
@@ -337,11 +364,23 @@ export const Board: React.FC = () => {
         try {
           const parsed = JSON.parse(saved);
           setElements(parsed, true);
+          
+          const storedTotal = localStorage.getItem(`total_pages_local`);
+          
+          const maxPage = parsed.reduce((max: number, el: CanvasElement) => Math.max(max, el.pageIndex || 1), 1);
+          const total = storedTotal ? parseInt(storedTotal, 10) : maxPage;
+          
+          setCanvasMode('pages');
+          setTotalPages(total);
+          setCurrentPage(1);
         } catch (e) {
           console.error('Failed to parse local fallback board data:', e);
         }
       } else {
         setElements([], true);
+        setCanvasMode('pages');
+        setTotalPages(1);
+        setCurrentPage(1);
       }
       setBoardTitle('Local Workspace');
       isLoadedRef.current = true;
@@ -392,6 +431,15 @@ export const Board: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, [elements, id, accessToken]);
+
+  // Sync page configuration changes to localStorage
+  useEffect(() => {
+    if (!isLoadedRef.current) return;
+    const boardKey = id || 'local';
+    localStorage.setItem(`canvas_mode_${boardKey}`, canvasMode);
+    localStorage.setItem(`total_pages_${boardKey}`, totalPages.toString());
+  }, [canvasMode, totalPages, id]);
+
 
   // Manual save handler
   const handleManualSave = async () => {
@@ -480,13 +528,13 @@ export const Board: React.FC = () => {
     ctx.translate(pan.x, pan.y);
     ctx.scale(zoom, zoom);
 
-    // Draw Snapping Grid
+    // Draw Snapping Grid across entire screen bounds (scrollable, covers screen)
     if (gridEnabled) {
-      drawGrid(ctx, dimensions.width, dimensions.height, pan, zoom);
+      drawGrid(ctx, dimensions.width, dimensions.height, pan, zoom, gridType);
     }
 
     // Draw Elements
-    elements.forEach(el => {
+    visibleElements.forEach(el => {
       if (el.id === editingTextElementId) return;
       const rc = rough.canvas(canvas);
       drawElement(ctx, rc, el);
@@ -500,7 +548,7 @@ export const Board: React.FC = () => {
 
     // Draw Selection Bounds Box
     if (tool === 'selection' && selectedIds.length === 1) {
-      const selectedEl = elements.find(el => el.id === selectedIds[0]);
+      const selectedEl = visibleElements.find(el => el.id === selectedIds[0]);
       if (selectedEl) {
         drawSelectionBox(ctx, selectedEl, zoom);
       }
@@ -531,7 +579,7 @@ export const Board: React.FC = () => {
     });
 
     ctx.restore();
-  }, [elements, tempDrawingElement, selectedIds, action, selectionBoxStart, selectionBoxEnd, pan, zoom, gridEnabled, collaborators, dimensions]);
+  }, [elements, visibleElements, tempDrawingElement, selectedIds, action, selectionBoxStart, selectionBoxEnd, pan, zoom, gridEnabled, gridType, canvasMode, currentPage, collaborators, dimensions]);
 
   // 4. MOUSE EVENT HANDLERS
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -559,7 +607,7 @@ export const Board: React.FC = () => {
     if (tool === 'selection') {
       // 1. Check if user clicked rotation handle of single selected element
       if (selectedIds.length === 1) {
-        const selectedEl = elements.find(el => el.id === selectedIds[0]);
+        const selectedEl = visibleElements.find(el => el.id === selectedIds[0]);
         if (selectedEl && isOverRotationHandle(worldPt, selectedEl, zoom)) {
           setAction('rotating');
           setStartPoint(worldPt);
@@ -569,7 +617,7 @@ export const Board: React.FC = () => {
 
       // 2. Check if clicked over handles (to resize)
       if (selectedIds.length === 1) {
-        const selectedEl = elements.find(el => el.id === selectedIds[0]);
+        const selectedEl = visibleElements.find(el => el.id === selectedIds[0]);
         if (selectedEl) {
           // Simplistic corners check for handle sizing index
           const handles = [
@@ -590,7 +638,7 @@ export const Board: React.FC = () => {
       }
 
       // 3. Find if point is over any element (from top to bottom layer)
-      const hitElement = [...elements].reverse().find(el => isPointOverElement(worldPt, el));
+      const hitElement = [...visibleElements].reverse().find(el => isPointOverElement(worldPt, el));
       
       if (hitElement) {
         // Toggle/multi select with Cmd/Ctrl key
@@ -606,7 +654,7 @@ export const Board: React.FC = () => {
 
         // Prepare elements drag offsets
         const targetIds = selectedIds.includes(hitElement.id) ? selectedIds : [hitElement.id];
-        const offsets = elements
+        const offsets = visibleElements
           .filter(el => targetIds.includes(el.id))
           .map(el => ({
             id: el.id,
@@ -645,7 +693,8 @@ export const Board: React.FC = () => {
         strokeWidth,
         dashStyle,
         roughness,
-        seed: Math.floor(Math.random() * 100000)
+        seed: Math.floor(Math.random() * 100000),
+        pageIndex: currentPage
       };
 
       if (tool === 'freehand') {
@@ -660,7 +709,7 @@ export const Board: React.FC = () => {
     else {
       setAction('erasing');
       // Find element clicked and delete it
-      const hitElement = [...elements].reverse().find(el => isPointOverElement(worldPt, el));
+      const hitElement = [...visibleElements].reverse().find(el => isPointOverElement(worldPt, el));
       if (hitElement) {
         const nextElements = elements.filter(el => el.id !== hitElement.id);
         setElements(nextElements);
@@ -687,7 +736,7 @@ export const Board: React.FC = () => {
     if (action === 'none') return;
 
     if (action === 'erasing') {
-      const hitElement = [...elements].reverse().find(el => isPointOverElement(worldPt, el));
+      const hitElement = [...visibleElements].reverse().find(el => isPointOverElement(worldPt, el));
       if (hitElement) {
         const nextElements = elements.filter(el => el.id !== hitElement.id);
         setElements(nextElements);
@@ -709,7 +758,7 @@ export const Board: React.FC = () => {
 
     else if (action === 'moving') {
       // Drag/move items based on calculated offsets
-      elements.forEach(el => {
+      visibleElements.forEach(el => {
         const offset = draggingStartOffsets.find(o => o.id === el.id);
         if (offset) {
           let nextX = worldPt.x - offset.dx;
@@ -724,7 +773,7 @@ export const Board: React.FC = () => {
     }
 
     else if (action === 'resizing' && selectedIds.length === 1) {
-      const selectedEl = elements.find(el => el.id === selectedIds[0]);
+      const selectedEl = visibleElements.find(el => el.id === selectedIds[0]);
       if (selectedEl) {
         let nextW = worldPt.x - selectedEl.x;
         let nextH = worldPt.y - selectedEl.y;
@@ -737,7 +786,7 @@ export const Board: React.FC = () => {
     }
 
     else if (action === 'rotating' && selectedIds.length === 1) {
-      const selectedEl = elements.find(el => el.id === selectedIds[0]);
+      const selectedEl = visibleElements.find(el => el.id === selectedIds[0]);
       if (selectedEl) {
         const center = getElementCenter(selectedEl);
         // Calculate angle based on vector from element center to current mouse
@@ -797,7 +846,7 @@ export const Board: React.FC = () => {
 
     if (action === 'selecting') {
       // Find all elements inside selection box bounds
-      const boxedIds = elements
+      const boxedIds = visibleElements
         .filter(el => isElementInsideBox(el, selectionBoxStart, selectionBoxEnd))
         .map(el => el.id);
       setSelectedIds(boxedIds);
@@ -843,7 +892,8 @@ export const Board: React.FC = () => {
           ...tempDrawingElement,
           width: 120,
           height: 30,
-          text: 'Text here'
+          text: 'Text here',
+          pageIndex: tempDrawingElement.pageIndex
         }]);
       } else {
         let normalizedElement = { ...tempDrawingElement };
@@ -866,15 +916,7 @@ export const Board: React.FC = () => {
         setElements(finishedElements);
         broadcastCanvasState(finishedElements);
 
-        // Switch tool to selection and select the newly drawn shape
-        if (
-          normalizedElement.type === 'rectangle' ||
-          normalizedElement.type === 'ellipse' ||
-          normalizedElement.type === 'diamond'
-        ) {
-          setTool('selection');
-          setSelectedIds([normalizedElement.id]);
-        }
+        // Do not switch to selection tool, keep shape active
       }
       setTempDrawingElement(null);
     }
@@ -1023,7 +1065,7 @@ export const Board: React.FC = () => {
         if (dx !== 0 || dy !== 0) {
           e.preventDefault();
           const nextElements = elements.map(el => {
-            if (selectedIds.includes(el.id)) {
+            if (selectedIds.includes(el.id) && (el.pageIndex || 1) === currentPage) {
               return { ...el, x: el.x + dx, y: el.y + dy };
             }
             return el;
@@ -1071,7 +1113,8 @@ export const Board: React.FC = () => {
               dashStyle,
               roughness,
               imageUrl: dataUrl,
-              seed: Math.floor(Math.random() * 100000)
+              seed: Math.floor(Math.random() * 100000),
+              pageIndex: currentPage
             };
 
             const nextElements = [...elements, newImgEl];
@@ -1111,7 +1154,9 @@ export const Board: React.FC = () => {
   };
 
   return (
-    <div className="relative w-screen h-screen bg-dark-950 overflow-hidden">
+    <div className={`relative w-screen h-screen overflow-hidden transition-colors duration-300 ${
+      theme === 'dark' ? 'bg-dark-950' : 'bg-white'
+    }`}>
       
       {/* Workspace Tabs Bar */}
       {user?.email && openTabs.length > 0 && (
@@ -1292,6 +1337,8 @@ export const Board: React.FC = () => {
       <Toolbar />
       <StylePanel />
       <AiChatPanel />
+
+
 
       {/* CANVAS VIEWPORT */}
       <canvas
